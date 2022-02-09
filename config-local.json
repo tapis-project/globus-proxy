@@ -1,4 +1,5 @@
 {
-	"service_name": "globux-proxy",
-	"log_level": "DEBUG"
+  "service_name": "globux-proxy",
+  "log_level": "DEBUG",
+  "tenants": ["dev"]
 }

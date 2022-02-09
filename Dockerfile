@@ -13,4 +13,3 @@ COPY pytest.ini /home/tapis
 
 RUN chown -R tapis:tapis /home/tapis
 USER tapis
-

@@ -1,0 +1,11 @@
+{
+  "$id": "http://github.com/tapis-project/globus-proxy/configschema.json",
+  "$schema": "http://json-schema.org/schema#",
+  "properties": {
+    "python_framework_type": {
+      "type": "string",
+      "default": "flask"
+    }
+  },
+ "required": ["tenants"] 
+}
