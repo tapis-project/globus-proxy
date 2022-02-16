@@ -4,7 +4,8 @@ version: "3.5"
 
 services:
         globus-proxy:
-                image: tapis/globus-proxy-api
+               #  image: tapis/globus-proxy-api
+                build: .
                 ports:
                         - "5001:5000"
                 volumes:
