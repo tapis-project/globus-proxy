@@ -7,7 +7,7 @@ services:
                #  image: tapis/globus-proxy-api
                 build: .
                 ports:
-                        - "5001:5000"
+                        - "5000:5000"
                 volumes:
                         - ./config-local.json:/home/tapis/config.json
                         - ./service.log:/home/tapis/service.log
