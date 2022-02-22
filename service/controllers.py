@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime, timedelta
 
 from flask import Flask, current_app, request
 from flask_restful import Resource
@@ -24,24 +25,30 @@ class AuthURLResource(Resource):
     """
     def get(self, client_id):
         logger.debug("in get for tokens resource")
-        # init globus_sdk client
-        # try:
-        #    id_client = globus_sdk().AuthClient()
-        #    id_response = id_client.get_identities(ids=client_id)
-        #except Exception as e:
-        #    logger.debug(f'Encountered exception while checking identity::\n\t{e}')
-        # else:
-        #    logger.debug(f'got response checking id:: {id_response}')
+        # TODO: a call to get_identities needs to be authenticated
+        # there might not be a way to figure out if the client_id 
+        # is valid or not without letting the user go to the url and find out
         try:
             client = globus_sdk.NativeAppAuthClient(client_id)
         except Exception as e:
             logger.debug(f'Encountered exception while initializing globus_dsk::\n\t{e}')
+            return utils.error()
         client.oauth2_start_flow(refresh_tokens=True)
         client_uuid = uuid.uuid4()
 
-        # save client in memory
-        local_client_uuid = locals()['client_uuid']
-        setattr(current_app, str(local_client_uuid), client)
+        # local_client_uuid = locals()['client_uuid']
+        # grab client list from memory if it exists
+        # if not, create it
+        try:
+            local_client_dict = getattr(current_app, 'local_client_dict')
+        except Exception as e:
+            local_client_dict = {}
+        finally:
+            # save client into the dict then save the dict back to mem
+            local_client_dict[str(client_uuid)] = {'timestamp': datetime.now(), 'client': client}
+            setattr(current_app, 'local_client_dict', local_client_dict)
+            logger.debug('have local_client_dict::')
+            logger.debug(local_client_dict)
 
         authorize_url = client.oauth2_get_authorize_url()
         return utils.ok(
@@ -56,18 +63,41 @@ class TokensResource(Resource):
     def get(self, uuid, auth_code):
         # retrieve client from memory
         # TODO: return 404 if not found
-        client = getattr(current_app, uuid)
-        delattr(current_app, uuid)
         try:
-            logger.debug('after delete, have ', getattr(current_app, uuid))
+            local_client_dict = getattr(current_app, 'local_client_dict')
+            # client = getattr(current_app, uuid)
+            client = local_client_dict[uuid]['client']
+            # debug
+            logger.debug('got client from memory::')
+            logger.debug(client)
+        except KeyError:
+            return utils.error(
+                msg='Could not authenticate Globus. Please try the authentication process over again'
+            )
         except Exception as e:
-            logger.debug('item was deleted successfully')
-        # TODO: clean up any objects older than 10 mintues
+            return utils.error(
+            )
+        finally:
+            # delete object from mem & cleanup any objects > 10 minutes old
+            del local_client_dict[uuid]
+            for key in local_client_dict:
+                timestamp = datetime.now()
+                # TODO: fix this line - key['datetime'] is getting the string
+                # indeced of the key instad of the value in the dict
+                if timestamp - key['datetime'] > timedelta(minutes=10):
+                    logger.debug('client is older than 10 minutes')
+            setattr(current_app, 'local_client_dict', local_client_dict)
 
         # get access / refresh tokens
-        token_response = client.oauth2_exchange_code_for_tokens(auth_code)
-        access_token = token_response['access_token']
-        refresh_token = token_response['refresh_token']
+        try:
+            token_response = client.oauth2_exchange_code_for_tokens(auth_code)
+        except globus_sdk.services.auth.errors.AuthAPIError:
+            return utils.error(
+                msg = 'Invalid auth code given for client'
+            )
+        else:
+            access_token = token_response['access_token']
+            refresh_token = token_response['refresh_token']
         
         return utils.ok(
                 result = {"access_token": access_token, "refresh_token": refresh_token}, 
@@ -79,16 +109,14 @@ class CheckTokensResource(Resource):
     check validity of auth / refresh tokens and exchange if needed
     """
     def get(self, endpoint_id):
-        # query = str(request.query_string)
-        # logger.debug(query)
         query = request.args
         access_token = query.get('access_token')
         refresh_token = query.get('refresh_token')
         
         # debug
-        logger.debug('have tokens')
-        logger.debug(access_token)
-        logger.debug(refresh_token)
+        # logger.debug('have tokens')
+        # logger.debug(access_token)
+        # logger.debug(refresh_token)
         ###
 
         ac_token = ''
