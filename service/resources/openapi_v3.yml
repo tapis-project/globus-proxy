@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.0.2
 info:
   title: Tapis Globus Proxy API
   description: The Tapis Globus Proxy API proxies calls to Globus coming from a Tapis service.
