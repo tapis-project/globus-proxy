@@ -76,6 +76,7 @@ paths:
         - name: client_id
           in: path
           required: true
+          description: Globus client associated with the request.
           schema:
             $ref: '#/components/schemas/ClientIdString'
       responses:
@@ -97,7 +98,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/auth/tokens/${auth_code}':
+  '/v3/globus-proxy/auth/tokens/{session_id}/{auth_code}':
 # Python SDK:
 #auth_code = input("Please enter the code you get after login here: ").strip()
 #token_response = client.oauth2_exchange_code_for_tokens(auth_code)
@@ -112,6 +113,12 @@ paths:
         Exchange a Globus *Native App Authorization Code* for a pair of access and refresh tokens.
       operationId: getTokens
       parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: Tapis session Id tracking the OAuth2 flow.
+          schema:
+            type: string
         - name: auth_code
           in: path
           required: true
@@ -131,7 +138,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RespBasic'
 
-  '/v3/globus-proxy/auth/check_tokens/${endpoint_id}':
+  '/v3/globus-proxy/auth/check_tokens/{client_id}/{endpoint_id}':
     # Python SDK:
     get:
       tags:
@@ -143,6 +150,12 @@ paths:
         Access and refresh tokens must be provided as query parameters.
       operationId: checkTokens
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -177,7 +190,7 @@ paths:
                 $ref: '#/components/schemas/RespBasic'
 
   # --- Paths for File Operations -----------------------------------------------------
-  '/v3/globus-proxy/ops/{endpoint_id}/{path}':
+  '/v3/globus-proxy/ops/{client_id}/{endpoint_id}/{path}':
     get:
       tags:
         - File Operations
@@ -187,6 +200,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: listFiles
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -209,7 +228,7 @@ paths:
             type: string
         - name: recurse
           in: query
-          description: recursive listing
+          description: perform a recursive listing
           schema:
             type: boolean
             default: false
@@ -253,6 +272,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: deletePath
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -304,7 +329,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/ops/{endpoint_id}/mkdir':
+  '/v3/globus-proxy/ops/{client_id}/{endpoint_id}/mkdir':
     post:
       tags:
         - File Operations
@@ -315,6 +340,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: makeDir
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -358,7 +389,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/ops/{endpoint_id}/rename':
+  '/v3/globus-proxy/ops/{client_id}/{endpoint_id}/rename':
     post:
       tags:
         - File Operations
@@ -370,6 +401,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: renamePath
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -442,6 +479,7 @@ paths:
         - name: client_id
           in: path
           required: true
+          description: Globus client associated with the request.
           schema:
             $ref: '#/components/schemas/ClientIdString'
         - name: access_token
@@ -493,6 +531,7 @@ paths:
         - name: client_id
           in: path
           required: true
+          description: Globus client associated with the request.
           schema:
             $ref: '#/components/schemas/ClientIdString'
         - name: task_id
@@ -543,6 +582,7 @@ paths:
         - name: client_id
           in: path
           required: true
+          description: Globus client associated with the request.
           schema:
             $ref: '#/components/schemas/ClientIdString'
         - name: task_id
@@ -896,9 +936,15 @@ components:
           example: "/dirA/file_new.txt"
     ReqCreateTransfer:
       required:
+        - source_endpoint
+        - destination_endpoint
         - transfer_items
       type: object
       properties:
+        source_endpoint:
+          type: string
+        destination_endpoint:
+          type: string
         transfer_items:
           type: array
           minItems: 1
@@ -957,7 +1003,7 @@ components:
       properties:
         url:
           type: string
-        sesssionId:
+        sessionId:
           type: string
     RespAuthTokens:
       type: object
