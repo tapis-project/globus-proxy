@@ -9,6 +9,11 @@ services:
                 ports:
                         - "5000:5000"
                 volumes:
+                        - ./configschema.json:/home/tapis/configschema.json
                         - ./config-local.json:/home/tapis/config.json
                         - ./service.log:/home/tapis/service.log
- 
+        redis:
+                image: redis
+                ports:
+                        - 6379:6379
+

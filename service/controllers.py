@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import datetime, timedelta
+from db import check_for_session, add_client_to_store 
 
 from flask import Flask, current_app, request
 from flask_restful import Resource
@@ -21,7 +22,8 @@ class HealthcheckResource(ReadyResource):
 
 class AuthURLResource(Resource):
     """
-    receive tokens using oauth2 
+    Begin Globus OAuth2 flow using the client ID. 
+    Returns a url to follow for Globus login and a client_uuid which must be passed to the /tokens endpoint
     """
     def get(self, client_id):
         logger.debug("in get for tokens resource")
@@ -39,16 +41,26 @@ class AuthURLResource(Resource):
         # local_client_uuid = locals()['client_uuid']
         # grab client list from memory if it exists
         # if not, create it
+        # try:
+        #     local_client_dict = getattr(current_app, 'local_client_dict')
+        # except Exception as e:
+        #     local_client_dict = {}
+        # finally:
+        #     # save client into the dict then save the dict back to mem
+        #     local_client_dict[str(client_uuid)] = {'timestamp': datetime.now(), 'client': client}
+        #     setattr(current_app, 'local_client_dict', local_client_dict)
+        #     logger.debug('have local_client_dict::')
+        #     logger.debug(local_client_dict)
+
         try:
-            local_client_dict = getattr(current_app, 'local_client_dict')
+            add_client_to_store(client_uuid)
         except Exception as e:
-            local_client_dict = {}
-        finally:
-            # save client into the dict then save the dict back to mem
-            local_client_dict[str(client_uuid)] = {'timestamp': datetime.now(), 'client': client}
-            setattr(current_app, 'local_client_dict', local_client_dict)
-            logger.debug('have local_client_dict::')
-            logger.debug(local_client_dict)
+            logger.critical(
+                msg=f'Unable to store session client in DB due to {e}'
+            )
+            return utils.error(
+                msg=f'Unable to store session client in DB due to {e}'
+            )
 
         authorize_url = client.oauth2_get_authorize_url()
         return utils.ok(
@@ -58,7 +70,7 @@ class AuthURLResource(Resource):
 
 class TokensResource(Resource):
     """
-    exchange auth code for access and refresh tokens
+    exchange auth code & client_uuid for access and refresh tokens
     """
     def get(self, uuid, auth_code):
         # retrieve client from memory
@@ -76,16 +88,17 @@ class TokensResource(Resource):
             )
         except Exception as e:
             return utils.error(
+                msg=f'Unexpected error while continuing auth flow: {e}'
             )
         finally:
             # delete object from mem & cleanup any objects > 10 minutes old
             del local_client_dict[uuid]
             for key in local_client_dict:
                 timestamp = datetime.now()
-                # TODO: fix this line - key['datetime'] is getting the string
-                # indeced of the key instad of the value in the dict
-                if timestamp - key['datetime'] > timedelta(minutes=10):
-                    logger.debug('client is older than 10 minutes')
+            #     # TODO: fix this line - key['datetime'] is getting the string
+            #     # indeced of the key instad of the value in the dict
+            #     if timestamp - key['datetime'] > timedelta(minutes=10):
+            #         logger.debug('client is older than 10 minutes')
             setattr(current_app, 'local_client_dict', local_client_dict)
 
         # get access / refresh tokens
