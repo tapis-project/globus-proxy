@@ -71,7 +71,7 @@ paths:
       description: |
         Given a Globus Client Id return the authorization URL that can be used by an end-user to
         authenticate and obtain a *Native App Authorization Code*.
-      operationId: getAuthUrl
+      operationId: getAuthInfo
       parameters:
         - name: client_id
           in: path
@@ -85,7 +85,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RespGlobusAuthUrl'
+                $ref: '#/components/schemas/RespGlobusAuthInfo'
         '404':
           description: Client not found
           content:
@@ -985,7 +985,7 @@ components:
       properties:
         url:
           type: string
-    RespGlobusAuthUrl:
+    RespGlobusAuthInfo:
       type: object
       properties:
         status:
@@ -995,10 +995,10 @@ components:
         version:
           type: string
         result:
-          $ref: '#/components/schemas/ResultGlobusAuthUrl'
+          $ref: '#/components/schemas/ResultGlobusAuthInfo'
         metadata:
           type: object
-    ResultGlobusAuthUrl:
+    ResultGlobusAuthInfo:
       type: object
       properties:
         url:
