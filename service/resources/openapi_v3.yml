@@ -662,8 +662,8 @@ components:
     #    }
     #  }
     #  ============================================================================================
-    # --- FileInfo -------------------------------------------------------------
-    FileInfo:
+    # --- GlobusFileInfo -------------------------------------------------------------
+    GlobusFileInfo:
       type: object
       properties:
         type:
@@ -1048,7 +1048,7 @@ components:
         result:
           type: array
           items:
-            $ref: '#/components/schemas/FileInfo'
+            $ref: '#/components/schemas/GlobusFileInfo'
         version:
           type: string
         metadata:
