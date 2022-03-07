@@ -22,12 +22,15 @@ def check_for_session(client_uuid):
     if none found, raises keyerror
     """
     try:
-        client = client_store.get(cleint_uuid = client_uuid)
+        client = client_store.get(client_uuid)
     except Exception as e:
         logging.critical(f'Got exception trying to check database for active client. e: {e}')
-    return client
+    else:
+        return client
 
-def add_client_to_store(client_uuid, client):
+def add_client_to_store(session_id, client):
     """
     Adds client to the store, using a given uuid as the key
     """
+    expiry = timedelta(minutes=11)
+    client_store.setex(session_id, expiry, client) # assign the client to a session_id which only lives for 11 minutes

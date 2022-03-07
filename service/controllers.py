@@ -1,5 +1,7 @@
 import os
+from secrets import token_urlsafe
 import uuid
+import json
 from datetime import datetime, timedelta
 from db import check_for_session, add_client_to_store 
 
@@ -22,11 +24,9 @@ class HealthcheckResource(ReadyResource):
 
 class AuthURLResource(Resource):
     """
-    Begin Globus OAuth2 flow using the client ID. 
-    Returns a url to follow for Globus login and a client_uuid which must be passed to the /tokens endpoint
+    Return authorization URL given client Id
     """
     def get(self, client_id):
-        logger.debug("in get for tokens resource")
         # TODO: a call to get_identities needs to be authenticated
         # there might not be a way to figure out if the client_id 
         # is valid or not without letting the user go to the url and find out
@@ -34,72 +34,33 @@ class AuthURLResource(Resource):
             client = globus_sdk.NativeAppAuthClient(client_id)
         except Exception as e:
             logger.debug(f'Encountered exception while initializing globus_dsk::\n\t{e}')
-            return utils.error()
-        client.oauth2_start_flow(refresh_tokens=True)
-        client_uuid = uuid.uuid4()
-
-        # local_client_uuid = locals()['client_uuid']
-        # grab client list from memory if it exists
-        # if not, create it
-        # try:
-        #     local_client_dict = getattr(current_app, 'local_client_dict')
-        # except Exception as e:
-        #     local_client_dict = {}
-        # finally:
-        #     # save client into the dict then save the dict back to mem
-        #     local_client_dict[str(client_uuid)] = {'timestamp': datetime.now(), 'client': client}
-        #     setattr(current_app, 'local_client_dict', local_client_dict)
-        #     logger.debug('have local_client_dict::')
-        #     logger.debug(local_client_dict)
-
-        try:
-            add_client_to_store(client_uuid)
-        except Exception as e:
-            logger.critical(
-                msg=f'Unable to store session client in DB due to {e}'
-            )
             return utils.error(
-                msg=f'Unable to store session client in DB due to {e}'
+                msg = 'Unknown error occurred'
             )
-
+        session_client = client.oauth2_start_flow(refresh_tokens=True)
         authorize_url = client.oauth2_get_authorize_url()
+
         return utils.ok(
-                result = {"url": authorize_url, "uuid": client_uuid}, 
+                # result = {"url": authorize_url, "uuid": session_id}, 
+                result = {"url": authorize_url, "session_id": session_client.verifier}, 
                 msg = f'Please go to this URL and login: {authorize_url}'
               )
 
 class TokensResource(Resource):
     """
-    exchange auth code & client_uuid for access and refresh tokens
+    exchange client_id, session_id, & auth code for access and refresh tokens
     """
-    def get(self, uuid, auth_code):
-        # retrieve client from memory
-        # TODO: return 404 if not found
+    def get(self, client_id, session_id, auth_code):
+
         try:
-            local_client_dict = getattr(current_app, 'local_client_dict')
-            # client = getattr(current_app, uuid)
-            client = local_client_dict[uuid]['client']
-            # debug
-            logger.debug('got client from memory::')
-            logger.debug(client)
-        except KeyError:
-            return utils.error(
-                msg='Could not authenticate Globus. Please try the authentication process over again'
-            )
+            client = globus_sdk.NativeAppAuthClient(client_id)
+            session_client = client.oauth2_start_flow(verifier=session_id)
         except Exception as e:
+            logger.debug(f'Encountered exception while initializing globus_sdk::\n\t{e}')
             return utils.error(
-                msg=f'Unexpected error while continuing auth flow: {e}'
+                msg= 'Unknown error occurred. Unable to authenticate client'
             )
-        finally:
-            # delete object from mem & cleanup any objects > 10 minutes old
-            del local_client_dict[uuid]
-            for key in local_client_dict:
-                timestamp = datetime.now()
-            #     # TODO: fix this line - key['datetime'] is getting the string
-            #     # indeced of the key instad of the value in the dict
-            #     if timestamp - key['datetime'] > timedelta(minutes=10):
-            #         logger.debug('client is older than 10 minutes')
-            setattr(current_app, 'local_client_dict', local_client_dict)
+
 
         # get access / refresh tokens
         try:
@@ -109,8 +70,11 @@ class TokensResource(Resource):
                 msg = 'Invalid auth code given for client'
             )
         else:
-            access_token = token_response['access_token']
-            refresh_token = token_response['refresh_token']
+            try:
+                access_token = token_response['access_token']
+                refresh_token = token_response['refresh_token']
+            except KeyError:
+                logger.error('Could not parse tokens from ')
         
         return utils.ok(
                 result = {"access_token": access_token, "refresh_token": refresh_token}, 
@@ -122,15 +86,21 @@ class CheckTokensResource(Resource):
     check validity of auth / refresh tokens and exchange if needed
     """
     def get(self, endpoint_id):
-        query = request.args
-        access_token = query.get('access_token')
-        refresh_token = query.get('refresh_token')
-        
-        # debug
-        # logger.debug('have tokens')
-        # logger.debug(access_token)
-        # logger.debug(refresh_token)
-        ###
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+
+        logger.debug(f'in check tokens with ac: {access_token} & rf: {refresh_token}')
+
+        if access_token is None or refresh_token is None:
+            return utils.error(
+                msg = 'Access token and refresh token must be provided as query parameters'
+            )
+
+        # check access token
+        # check refresh token
+        # if access token is valid but refresh is not, return access token
+        # if access token is invalid but refresh token is valid, get new token
+        # if access token and refresh token is invalid, error
 
         ac_token = ''
         rf_token = ''
@@ -139,28 +109,34 @@ class CheckTokensResource(Resource):
         client = globus_sdk.NativeAppAuthClient(endpoint_id)
         try:
             ac_response = client.oauth2_validate_token(access_token)
-        except:
-            logger.debug('Unknown error checking validity of access token. Please try again later.')
-        else:
-            logger.debug(f'ac:: {ac_response}')
-            ac_token = access_token if ac_response['active'] == True else None
-        try:
             rf_response = client.oauth2_validate_token(refresh_token)
         except:
-            logger.debug('Unknown error checking validity of access token. Please try again later.')    
+            logger.debug('Unknown error checking validity of tokens')
+            return utils.error(
+                msg = 'Unable to check validity of given tokens'
+            )
         else:
+            logger.debug(f'ac:: {ac_response}')
             logger.debug(f'rf:: {rf_response}')
+            ac_token = access_token if ac_response['active'] == True else None
             rf_token = refresh_token if rf_response['active'] == True else None
 
         # if either token is none, get new tokens
         if ac_token is None or rf_token is None:
             try:
-                client.oauth2_refresh_token(str(refresh_token))
+                refresh_response = client.oauth2_refresh_token(str(refresh_token))
             except:
                 logger.debug('Unknown error generating new tokens. Please try again later.')
+            else:
+                logger.debug(f'have token response:: {refresh_response}')
+                return utils.ok(
+                    msg = 'Successfully refreshed tokens',
+                    result = {"access_token": refresh_response['access_token'], "refresh_token": rf_token}
+                )
+
         return utils.ok(
                 result = {"access_token": ac_token, "refresh_token": rf_token},
-                msg = {'Successfully validated tokens'}
+                msg = 'Successfully validated tokens'
               )
             
 

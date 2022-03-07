@@ -18,7 +18,7 @@ api = TapisApi(app, errors=flask_errors_dict)
 
 # Resources
 api.add_resource(AuthURLResource, '/v3/globus-proxy/auth/url/<client_id>')
-api.add_resource(TokensResource, '/v3/globus-proxy/auth/tokens/<uuid>/<auth_code>')
+api.add_resource(TokensResource, '/v3/globus-proxy/auth/tokens/<client_id>/<session_id>/<auth_code>')
 api.add_resource(CheckTokensResource, '/v3/globus-proxy/auth/check_tokens/<endpoint_id>')
 
 # Health checks
