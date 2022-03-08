@@ -226,12 +226,26 @@ paths:
           required: true
           schema:
             type: string
-        - name: recurse
+        - name: limit
           in: query
-          description: perform a recursive listing
+          description: pagination limit
           schema:
-            type: boolean
-            default: false
+            type: integer
+            default: 1000
+          example: 100
+        - name: offset
+          in: query
+          description: pagination offset
+          schema:
+            type: integer
+            default: 0
+          example: 50
+        - name: filter
+          in: query
+          description: select filter
+          schema:
+            type: string
+          example: "name:=test1.txt"
       responses:
         '200':
           description: A list of files
