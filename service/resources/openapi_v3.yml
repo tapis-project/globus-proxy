@@ -97,7 +97,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/auth/tokens/${auth_code}':
+  '/v3/globus-proxy/auth/tokens/${client_id}/${session_id}/${auth_code}':
 # Python SDK:
 #auth_code = input("Please enter the code you get after login here: ").strip()
 #token_response = client.oauth2_exchange_code_for_tokens(auth_code)
@@ -112,6 +112,16 @@ paths:
         Exchange a Globus *Native App Authorization Code* for a pair of access and refresh tokens.
       operationId: getTokens
       parameters:
+        - name: client_id
+          in: path
+          required: true 
+          schema:
+            type: string
+        - name: session_id
+          in: path
+          required: true 
+          schema:
+            type: string
         - name: auth_code
           in: path
           required: true

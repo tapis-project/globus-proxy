@@ -1,0 +1,21 @@
+---
+
+version: "3.5"
+
+services:
+  globus-proxy:
+    #  image: tapis/globus-proxy-api
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./configschema.json:/home/tapis/configschema.json
+      - ./config-local.json:/home/tapis/config.json
+      - ./service.log:/home/tapis/service.log
+  endpoint1:
+    image: centos7
+    ports:
+      - "8000:8000"
+    
+    
+

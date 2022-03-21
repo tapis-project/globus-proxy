@@ -1,9 +1,4 @@
-import os
-from secrets import token_urlsafe
-import uuid
 import json
-from datetime import datetime, timedelta
-from db import check_for_session, add_client_to_store 
 
 from flask import Flask, current_app, request
 from flask_restful import Resource
@@ -13,7 +8,11 @@ from tapisservice.tapisflask.resources import ReadyResource
 from tapisservice.logs import get_logger
 
 import globus_sdk
-import requests
+from globus_sdk import TransferAPIError
+
+from utils import check_token, get_transfer_client
+
+from multiprocessing import AuthenticationError
 
 logger = get_logger(__name__)
 app = Flask(__name__)
@@ -26,6 +25,7 @@ class AuthURLResource(Resource):
     """
     Return authorization URL given client Id
     """
+
     def get(self, client_id):
         # TODO: a call to get_identities needs to be authenticated
         # there might not be a way to figure out if the client_id 
@@ -50,13 +50,14 @@ class TokensResource(Resource):
     """
     exchange client_id, session_id, & auth code for access and refresh tokens
     """
+
     def get(self, client_id, session_id, auth_code):
 
         try:
             client = globus_sdk.NativeAppAuthClient(client_id)
             session_client = client.oauth2_start_flow(verifier=session_id)
         except Exception as e:
-            logger.debug(f'Encountered exception while initializing globus_sdk::\n\t{e}')
+            logger.error(f'Encountered exception while initializing globus_sdk::\n\t{e}')
             return utils.error(
                 msg= 'Unknown error occurred. Unable to authenticate client'
             )
@@ -71,8 +72,9 @@ class TokensResource(Resource):
             )
         else:
             try:
-                access_token = token_response['access_token']
-                refresh_token = token_response['refresh_token']
+                logger.debug(token_response)
+                access_token = token_response['transfer.api.globus.org']['access_token']
+                refresh_token = token_response['transfer.api.globus.org']['refresh_token']
             except KeyError:
                 logger.error('Could not parse tokens from ')
         
@@ -85,6 +87,7 @@ class CheckTokensResource(Resource):
     """
     check validity of auth / refresh tokens and exchange if needed
     """
+
     def get(self, endpoint_id):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
@@ -140,8 +143,77 @@ class CheckTokensResource(Resource):
               )
             
 
+class LsResource(Resource):
 
+    def get(self, client_id, endpoint_id, path):
+        # grab access token from query & make sure it's valid
+        try:
+            access_token = request.args.get('access_token')
+            refresh_token = request.args.get('refresh_token')
+            check_token(client_id, access_token)
+            check_token(client_id, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            logger.error(f'exception while parsing params for client {client_id}: {e}')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+        try:
+            transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+        except Exception as e:
+            logger.error(f'unable to get transfer client or client {client_id}: {e}')
+            return utils.error(
+                msg='Exception while generating authorization. Please check your request syntax and try again'
+            )
+        try:
+            # call operation_ls to make the directory
+            logger.debug(f'have endpoint id:: {endpoint_id}')
+            logger.debug(f'have path:: {path}')
+            logger.debug(f'have transfer_client:: {transfer_client}')
+            result = transfer_client.operation_ls(
+                endpoint_id=str(endpoint_id),
+                path=str(path)
+            )
+            logger.debug(f'after ls ')
+            # logger.debug(f'with {result}')
+            # logger.debug('\n{result.data}')
+            # logger.debug('\n{result.text}')
+        except TransferAPIError as e:
+            logger.error(f'transfer api error for client {client_id}: {e}')
+            if e.code == "AuthenticationFailed":
+                return utils.error(
+                    msg='Could not authenticate transfer client for ls operation'
+                )
+        except Exception as e:
+            logger.error(f'exception while doing ls operation for client {client_id}:: {e}')
+            return utils.error(
+                msg='Exception while performing ls operation'
+            )
+        else:
+            # TODO: send access token back, even if it's the same one
+            # if the tokens get refreshed live, we could have a race condition 
+            # figure out a way to test if refreshed access tokens will cause a call to fail
+                # especially for concurrent ops
+            result_dict = {}
+            for entry in result:
+                logger.debug(entry)
+                
+            return utils.ok(
+                msg='Successfully listed files',
+                result=json.dumps(result.text)
+            )
+            
+        return utils.error(
+            msg='Unknown error performing list operation'
+        )
 
+def MkdirResource(Resource):
+    def post(self):
+        pass
 
 
 
