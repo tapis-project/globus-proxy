@@ -1,10 +1,8 @@
 {
   "service_name": "globus-proxy",
-  "primary_site_admin_tenant_base_url": "ttps://admin.develop.tapis.io",
+  "primary_site_admin_tenant_base_url": "https://admin.develop.tapis.io",
   "service_site_id": "tacc",
   "service_tenant_id": "admin",
-  "redis_host": "redis",
-  "redis_port": "6379",
   "log_level": "DEBUG",
   "tenants": ["dev"]
 }

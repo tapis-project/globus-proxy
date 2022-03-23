@@ -1,2 +1,2 @@
-globus_sdk
+globus_sdk==3.5
 redis

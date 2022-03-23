@@ -1,4 +1,6 @@
+from ast import Pass
 import json
+import traceback
 
 from flask import Flask, current_app, request
 from flask_restful import Resource
@@ -10,7 +12,7 @@ from tapisservice.logs import get_logger
 import globus_sdk
 from globus_sdk import TransferAPIError
 
-from utils import check_token, get_transfer_client
+from utils import check_tokens, get_transfer_client
 
 from multiprocessing import AuthenticationError
 
@@ -92,8 +94,6 @@ class CheckTokensResource(Resource):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
 
-        logger.debug(f'in check tokens with ac: {access_token} & rf: {refresh_token}')
-
         if access_token is None or refresh_token is None:
             return utils.error(
                 msg = 'Access token and refresh token must be provided as query parameters'
@@ -143,25 +143,27 @@ class CheckTokensResource(Resource):
               )
             
 
-class LsResource(Resource):
-
-    def get(self, client_id, endpoint_id, path):
-        # grab access token from query & make sure it's valid
+class OpsResource(Resource):
+    def ops_precheck(self, client_id, access_token, refresh_token):
+        '''
+        Performs several precheck opertations such as
+            making sure the tokens are valid and exchanging an expired access token for an active one
+            activating a transfer client
+        
+        returns authenticated transfer client
+        '''
+        # check token validity
         try:
-            access_token = request.args.get('access_token')
-            refresh_token = request.args.get('refresh_token')
-            check_token(client_id, access_token)
-            check_token(client_id, refresh_token)
+            access_token, refresh_token = check_tokens(client_id, refresh_token, access_token)
         except AuthenticationError:
-            logger.error(f'Invalid token given for client {client_id}')
+            # refresh token is invalid, must redo auth process
+            logger.error(f'exception while validating tokens:: {e}')
             return utils.error(
-                msg='Given tokens are not valid. Try again with active auth tokens'
+                msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
             )
-        except Exception as e:
-            logger.error(f'exception while parsing params for client {client_id}: {e}')
-            return utils.error(
-                msg='Exception while parsing request parameters. Please check your request syntax and try again'
-                )
+            # TODO: handle more exceptions, figure out how to make them nice for the calling function
+        
+        # get transfer client
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
@@ -169,19 +171,39 @@ class LsResource(Resource):
             return utils.error(
                 msg='Exception while generating authorization. Please check your request syntax and try again'
             )
+        # return trans client
+        else:
+            return transfer_client
+
+    # ls
+    def get(self, client_id, endpoint_id, path):
+        # parse args & perform precheck
+        transfer_client = None
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        if not access_token or not refresh_token:
+            logger.error('error parsing args. Check syntax and try again')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+        try:
+            transfer_client = self.ops_precheck(client_id, access_token, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            pass
+            # TODO: handle more exceptions?
+
+        # perform ls op
         try:
             # call operation_ls to make the directory
-            logger.debug(f'have endpoint id:: {endpoint_id}')
-            logger.debug(f'have path:: {path}')
-            logger.debug(f'have transfer_client:: {transfer_client}')
             result = transfer_client.operation_ls(
-                endpoint_id=str(endpoint_id),
-                path=str(path)
+                endpoint_id=(endpoint_id),
+                path=path
             )
-            logger.debug(f'after ls ')
-            # logger.debug(f'with {result}')
-            # logger.debug('\n{result.data}')
-            # logger.debug('\n{result.text}')
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}')
             if e.code == "AuthenticationFailed":
@@ -198,22 +220,51 @@ class LsResource(Resource):
             # if the tokens get refreshed live, we could have a race condition 
             # figure out a way to test if refreshed access tokens will cause a call to fail
                 # especially for concurrent ops
-            result_dict = {}
-            for entry in result:
-                logger.debug(entry)
                 
             return utils.ok(
                 msg='Successfully listed files',
-                result=json.dumps(result.text)
+                result=result.data
             )
             
         return utils.error(
             msg='Unknown error performing list operation'
         )
 
-def MkdirResource(Resource):
-    def post(self):
-        pass
+    # mkdir
+    def post(self, client_id, endpoint_id, access_token, path):
+        # parse args and perform precheck
+        transfer_client = None
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        if not access_token or not refresh_token:
+            logger.error('error parsing args. Check syntax and try again')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+
+        try:
+            transfer_client = self.ops_precheck(client_id, access_token, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            pass
+            # TODO: handle more exceptions?
+
+        # perform mkdir op
+        try:
+            transfer_client.operation_mkdir(
+                endpoint_id=endpoint_id,
+                path=path
+            )
+        except:
+            pass
+        else:
+            pass
+
+
 
 
 
