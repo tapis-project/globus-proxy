@@ -71,11 +71,12 @@ paths:
       description: |
         Given a Globus Client Id return the authorization URL that can be used by an end-user to
         authenticate and obtain a *Native App Authorization Code*.
-      operationId: getAuthUrl
+      operationId: getAuthInfo
       parameters:
         - name: client_id
           in: path
           required: true
+          description: Globus client associated with the request.
           schema:
             $ref: '#/components/schemas/ClientIdString'
       responses:
@@ -84,7 +85,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RespUrl'
+                $ref: '#/components/schemas/RespGlobusAuthInfo'
         '404':
           description: Client not found
           content:
@@ -120,6 +121,7 @@ paths:
         - name: session_id
           in: path
           required: true 
+          description: Tapis session Id tracking the OAuth2 flow.
           schema:
             type: string
         - name: auth_code
@@ -141,7 +143,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RespBasic'
 
-  '/v3/globus-proxy/auth/check_tokens/${endpoint_id}':
+  '/v3/globus-proxy/auth/check_tokens/{client_id}/{endpoint_id}':
     # Python SDK:
     get:
       tags:
@@ -153,6 +155,12 @@ paths:
         Access and refresh tokens must be provided as query parameters.
       operationId: checkTokens
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -199,11 +207,10 @@ paths:
       parameters:
         - name: client_id
           in: path
-          description: Client Id
-          required: true 
+          required: true
+          description: Globus client associated with the request.
           schema:
-            type: string
-          example: "64e62dad-9a10-42c4-823e-411f77bfa263"
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -230,12 +237,26 @@ paths:
           required: true
           schema:
             type: string
-        - name: recurse
+        - name: limit
           in: query
-          description: recursive listing
+          description: pagination limit
           schema:
-            type: boolean
-            default: false
+            type: integer
+            default: 1000
+          example: 100
+        - name: offset
+          in: query
+          description: pagination offset
+          schema:
+            type: integer
+            default: 0
+          example: 50
+        - name: filter
+          in: query
+          description: select filter
+          schema:
+            type: string
+          example: "name:=test1.txt"
       responses:
         '200':
           description: A list of files
@@ -276,6 +297,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: deletePath
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -343,6 +370,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: makeDir
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -403,6 +436,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: renamePath
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: endpoint_id
           in: path
           description: Endpoint Id
@@ -466,7 +505,7 @@ paths:
                 $ref: '#/components/schemas/RespBasic'
 
   # --- Paths for Transfers -----------------------------------------------------
-  '/v3/globus-proxy/transfers':
+  '/v3/globus-proxy/transfers/{client_id}':
     post:
       tags:
         - Transfers
@@ -478,6 +517,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: createTransferTask
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: access_token
           in: query
           description: Globus transfer access token
@@ -514,7 +559,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/transfers/{task_id}':
+  '/v3/globus-proxy/transfers/{client_id}/{task_id}':
     get:
       tags:
         - Transfers
@@ -524,6 +569,12 @@ paths:
         Access token must be provided as a query parameter.
       operationId: getTransferTask
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: task_id
           in: path
           required: true
@@ -569,6 +620,12 @@ paths:
         cancelled the task still may have succeeded. Task status must be checked. See Globus documentation.
       operationId: cancelTransferTask
       parameters:
+        - name: client_id
+          in: path
+          required: true
+          description: Globus client associated with the request.
+          schema:
+            $ref: '#/components/schemas/ClientIdString'
         - name: task_id
           in: path
           required: true
@@ -646,8 +703,8 @@ components:
     #    }
     #  }
     #  ============================================================================================
-    # --- FileInfo -------------------------------------------------------------
-    FileInfo:
+    # --- GlobusFileInfo -------------------------------------------------------------
+    GlobusFileInfo:
       type: object
       properties:
         type:
@@ -920,9 +977,15 @@ components:
           example: "/dirA/file_new.txt"
     ReqCreateTransfer:
       required:
+        - source_endpoint
+        - destination_endpoint
         - transfer_items
       type: object
       properties:
+        source_endpoint:
+          type: string
+        destination_endpoint:
+          type: string
         transfer_items:
           type: array
           minItems: 1
@@ -962,6 +1025,26 @@ components:
       type: object
       properties:
         url:
+          type: string
+    RespGlobusAuthInfo:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        version:
+          type: string
+        result:
+          $ref: '#/components/schemas/ResultGlobusAuthInfo'
+        metadata:
+          type: object
+    ResultGlobusAuthInfo:
+      type: object
+      properties:
+        url:
+          type: string
+        session_id:
           type: string
     RespAuthTokens:
       type: object
@@ -1006,7 +1089,7 @@ components:
         result:
           type: array
           items:
-            $ref: '#/components/schemas/FileInfo'
+            $ref: '#/components/schemas/GlobusFileInfo'
         version:
           type: string
         metadata:
