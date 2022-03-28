@@ -1,6 +1,6 @@
-import os
-import uuid
-from datetime import datetime, timedelta
+from ast import Pass
+import json
+import traceback
 
 from flask import Flask, current_app, request
 from flask_restful import Resource
@@ -10,7 +10,11 @@ from tapisservice.tapisflask.resources import ReadyResource
 from tapisservice.logs import get_logger
 
 import globus_sdk
-import requests
+from globus_sdk import TransferAPIError
+
+from utils import check_tokens, get_transfer_client
+
+from multiprocessing import AuthenticationError
 
 logger = get_logger(__name__)
 app = Flask(__name__)
@@ -21,10 +25,10 @@ class HealthcheckResource(ReadyResource):
 
 class AuthURLResource(Resource):
     """
-    receive tokens using oauth2 
+    Return authorization URL given client Id
     """
+
     def get(self, client_id):
-        logger.debug("in get for tokens resource")
         # TODO: a call to get_identities needs to be authenticated
         # there might not be a way to figure out if the client_id 
         # is valid or not without letting the user go to the url and find out
@@ -32,61 +36,34 @@ class AuthURLResource(Resource):
             client = globus_sdk.NativeAppAuthClient(client_id)
         except Exception as e:
             logger.debug(f'Encountered exception while initializing globus_dsk::\n\t{e}')
-            return utils.error()
-        client.oauth2_start_flow(refresh_tokens=True)
-        client_uuid = uuid.uuid4()
-
-        # local_client_uuid = locals()['client_uuid']
-        # grab client list from memory if it exists
-        # if not, create it
-        try:
-            local_client_dict = getattr(current_app, 'local_client_dict')
-        except Exception as e:
-            local_client_dict = {}
-        finally:
-            # save client into the dict then save the dict back to mem
-            local_client_dict[str(client_uuid)] = {'timestamp': datetime.now(), 'client': client}
-            setattr(current_app, 'local_client_dict', local_client_dict)
-            logger.debug('have local_client_dict::')
-            logger.debug(local_client_dict)
-
+            return utils.error(
+                msg = 'Unknown error occurred'
+            )
+        session_client = client.oauth2_start_flow(refresh_tokens=True)
         authorize_url = client.oauth2_get_authorize_url()
+
         return utils.ok(
-                result = {"url": authorize_url, "uuid": client_uuid}, 
+                # result = {"url": authorize_url, "uuid": session_id}, 
+                result = {"url": authorize_url, "session_id": session_client.verifier}, 
                 msg = f'Please go to this URL and login: {authorize_url}'
               )
 
 class TokensResource(Resource):
     """
-    exchange auth code for access and refresh tokens
+    exchange client_id, session_id, & auth code for access and refresh tokens
     """
-    def get(self, uuid, auth_code):
-        # retrieve client from memory
-        # TODO: return 404 if not found
+
+    def get(self, client_id, session_id, auth_code):
+
         try:
-            local_client_dict = getattr(current_app, 'local_client_dict')
-            # client = getattr(current_app, uuid)
-            client = local_client_dict[uuid]['client']
-            # debug
-            logger.debug('got client from memory::')
-            logger.debug(client)
-        except KeyError:
-            return utils.error(
-                msg='Could not authenticate Globus. Please try the authentication process over again'
-            )
+            client = globus_sdk.NativeAppAuthClient(client_id)
+            session_client = client.oauth2_start_flow(verifier=session_id)
         except Exception as e:
+            logger.error(f'Encountered exception while initializing globus_sdk::\n\t{e}')
             return utils.error(
+                msg= 'Unknown error occurred. Unable to authenticate client'
             )
-        finally:
-            # delete object from mem & cleanup any objects > 10 minutes old
-            del local_client_dict[uuid]
-            for key in local_client_dict:
-                timestamp = datetime.now()
-                # TODO: fix this line - key['datetime'] is getting the string
-                # indeced of the key instad of the value in the dict
-                if timestamp - key['datetime'] > timedelta(minutes=10):
-                    logger.debug('client is older than 10 minutes')
-            setattr(current_app, 'local_client_dict', local_client_dict)
+
 
         # get access / refresh tokens
         try:
@@ -96,8 +73,12 @@ class TokensResource(Resource):
                 msg = 'Invalid auth code given for client'
             )
         else:
-            access_token = token_response['access_token']
-            refresh_token = token_response['refresh_token']
+            try:
+                logger.debug(token_response)
+                access_token = token_response['transfer.api.globus.org']['access_token']
+                refresh_token = token_response['transfer.api.globus.org']['refresh_token']
+            except KeyError:
+                logger.error('Could not parse tokens from ')
         
         return utils.ok(
                 result = {"access_token": access_token, "refresh_token": refresh_token}, 
@@ -108,16 +89,21 @@ class CheckTokensResource(Resource):
     """
     check validity of auth / refresh tokens and exchange if needed
     """
+
     def get(self, endpoint_id):
-        query = request.args
-        access_token = query.get('access_token')
-        refresh_token = query.get('refresh_token')
-        
-        # debug
-        # logger.debug('have tokens')
-        # logger.debug(access_token)
-        # logger.debug(refresh_token)
-        ###
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+
+        if access_token is None or refresh_token is None:
+            return utils.error(
+                msg = 'Access token and refresh token must be provided as query parameters'
+            )
+
+        # check access token
+        # check refresh token
+        # if access token is valid but refresh is not, return access token
+        # if access token is invalid but refresh token is valid, get new token
+        # if access token and refresh token is invalid, error
 
         ac_token = ''
         rf_token = ''
@@ -126,30 +112,265 @@ class CheckTokensResource(Resource):
         client = globus_sdk.NativeAppAuthClient(endpoint_id)
         try:
             ac_response = client.oauth2_validate_token(access_token)
-        except:
-            logger.debug('Unknown error checking validity of access token. Please try again later.')
-        else:
-            logger.debug(f'ac:: {ac_response}')
-            ac_token = access_token if ac_response['active'] == True else None
-        try:
             rf_response = client.oauth2_validate_token(refresh_token)
         except:
-            logger.debug('Unknown error checking validity of access token. Please try again later.')    
+            logger.debug('Unknown error checking validity of tokens')
+            return utils.error(
+                msg = 'Unable to check validity of given tokens'
+            )
         else:
+            logger.debug(f'ac:: {ac_response}')
             logger.debug(f'rf:: {rf_response}')
+            ac_token = access_token if ac_response['active'] == True else None
             rf_token = refresh_token if rf_response['active'] == True else None
 
         # if either token is none, get new tokens
         if ac_token is None or rf_token is None:
             try:
-                client.oauth2_refresh_token(str(refresh_token))
+                refresh_response = client.oauth2_refresh_token(str(refresh_token))
             except:
                 logger.debug('Unknown error generating new tokens. Please try again later.')
+            else:
+                logger.debug(f'have token response:: {refresh_response}')
+                return utils.ok(
+                    msg = 'Successfully refreshed tokens',
+                    result = {"access_token": refresh_response['access_token'], "refresh_token": rf_token}
+                )
+
         return utils.ok(
                 result = {"access_token": ac_token, "refresh_token": rf_token},
-                msg = {'Successfully validated tokens'}
+                msg = 'Successfully validated tokens'
               )
             
+
+class OpsResource(Resource):
+    def ops_precheck(self, client_id, endpoint_id, access_token, refresh_token):
+        '''
+        Performs several precheck opertations such as
+            making sure the tokens are valid and exchanging an expired access token for an active one
+            activating a transfer client
+        
+        returns authenticated transfer client
+        '''
+        # check token validity
+        try:
+            access_token, refresh_token = check_tokens(client_id, refresh_token, access_token)
+        except AuthenticationError:
+            # refresh token is invalid, must redo auth process
+            logger.error(f'exception while validating tokens:: {e}')
+            return utils.error(
+                msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
+            )
+            # TODO: handle more exceptions, figure out how to make them nice for the calling function
+
+        # get transfer client
+        try:
+            transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+        except Exception as e:
+            logger.error(f'unable to get transfer client or client {client_id}: {e}')
+            return utils.error(
+                msg='Exception while generating authorization. Please check your request syntax and try again'
+            )
+        
+        # activate endpoint
+        try:
+            result = transfer_client.endpoint_autoactivate(endpoint_id)
+            if result['code'] == "AutoActivationFailed":
+                raise AuthenticationError
+        except AuthenticationError as e:
+            logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
+            return utils.error(
+                msg=f'Endpoint {endpoint_id} must be manually activated'
+            )
+        except Exception as e:
+            pass
+            # TODO: handle excpetions. 
+        
+        # return trans client
+        return transfer_client
+
+    # ls
+    def get(self, client_id, endpoint_id, path):
+        # parse args & perform precheck
+        logger.debug(f'in ls with path:: {path}')
+        transfer_client = None
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        if not access_token or not refresh_token:
+            logger.error('error parsing args. Check syntax and try again')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+        try:
+            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            pass
+            # TODO: handle more exceptions?
+
+        # TODO: make sure the endpoint is activated before the call
+        # use autoactivate 
+
+        # perform ls op
+        try:
+            # call operation_ls to make the directory
+            result = transfer_client.operation_ls(
+                endpoint_id=(endpoint_id),
+                path=path
+            )
+        except TransferAPIError as e:
+            logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
+            # api errors come through as specific codes, each one can be handled separately 
+            if e.code == "AuthenticationFailed":
+                return utils.error(
+                    msg='Could not authenticate transfer client for ls operation'
+                )
+            elif e.code == "ClientError.NotFound":
+                return utils.error(
+                    msg='Path does not exist on given endpoint'
+                )
+            elif e.code == "ExternalError.DirListingFailed.GCDisconnected":
+                return utils.error(
+                    msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually'
+                )
+        except Exception as e:
+            logger.error(f'exception while doing ls operation for client {client_id}:: {e}')
+            return utils.error(
+                msg='Unknown error while performing ls operation'
+            )
+        else:
+            # TODO: send access token back, even if it's the same one
+            # if the tokens get refreshed live, we could have a race condition 
+            # figure out a way to test if refreshed access tokens will cause a call to fail
+                # especially for concurrent ops
+                
+            return utils.ok(
+                msg='Successfully listed files',
+                result=result.data,
+                metadata={'access_token': access_token}
+            )
+            
+        return utils.error(
+            msg='Unknown error performing list operation'
+        )
+
+    # mkdir
+    def post(self, client_id, endpoint_id, path):
+        # parse args and perform precheck
+        logger.debug(f'in mkdir, have path:: {path}')
+        transfer_client = None
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        if not access_token or not refresh_token:
+            logger.error('error parsing args')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+
+        try:
+            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            return utils.error(f'exception while performink mkdir operation for client {client_id} at path {path}:: {e}')
+            # TODO: handle more exceptions?
+
+        # perform mkdir op
+        try:
+            result = transfer_client.operation_mkdir(
+                endpoint_id=endpoint_id,
+                path=path
+            )
+        except TransferAPIError as e:
+            logger.error(f'transfer api error for client {client_id}: {e}')
+            if e.code == "AuthenticationFailed":
+                return utils.error(
+                    msg='Could not authenticate transfer client for mkdir operation'
+                )
+            # TODO: handle the path already existing
+        except Exception as e:
+            logger.error(f'exception while performink mkdir operation for client {client_id} at path {path}:: {e}')
+            return utils.error(
+                msg=f'Unknown error while performing mkdir operation at path {path}'
+            )
+        else:
+            return utils.ok(
+                msg=f'Successfully created directory at {path}',
+                result=result.data,
+                metadata={'access_token': access_token}
+            )
+        return utils.error(
+            msg=f'exception while performink mkdir operation for client {client_id} at path {path}'
+        )
+
+    # delete
+    def delete(self, client_id, endpoint_id, path):
+        # parse args and perform precheck
+        logger.debug(f'in delete, have path:: {path}')
+        transfer_client = None
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        if not access_token or not refresh_token:
+            logger.error('error parsing args')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+
+        try:
+            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            return utils.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
+            # TODO: handle more exceptions?
+
+        # perform delete
+        transfer_client.submit_delete()
+
+    # rename
+    def put(self, client_id, endpoint_id, path):
+        logger.debug(f'in put (rename) have path {path}')
+
+        # parse args and perform precheck
+        transfer_client = None
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        dest = request.args.get('dest')
+        if not access_token or not refresh_token:
+            logger.error('error parsing args')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+
+        try:
+            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            return utils.error(f'exception while performing rename operation for client {client_id} at path {path}:: {e}')
+            # TODO: handle more exceptions?
+
+        # perform rename
+        try:
+            globus_sdk.operation_rename(endpoint_id, path, dest)
+        except Exception as e:
+            logger.error(f'exception in rename with client {client_id}, endpoint {endpoint_id} and path {path}:: {e}')
+            return utils.error(
+                msg='Unknown error while performing rename'
+            )
 
 
 

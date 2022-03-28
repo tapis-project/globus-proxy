@@ -98,7 +98,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/auth/tokens/{session_id}/{auth_code}':
+  '/v3/globus-proxy/auth/tokens/${client_id}/${session_id}/${auth_code}':
 # Python SDK:
 #auth_code = input("Please enter the code you get after login here: ").strip()
 #token_response = client.oauth2_exchange_code_for_tokens(auth_code)
@@ -113,9 +113,14 @@ paths:
         Exchange a Globus *Native App Authorization Code* for a pair of access and refresh tokens.
       operationId: getTokens
       parameters:
+        - name: client_id
+          in: path
+          required: true 
+          schema:
+            type: string
         - name: session_id
           in: path
-          required: true
+          required: true 
           description: Tapis session Id tracking the OAuth2 flow.
           schema:
             type: string
@@ -226,6 +231,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: refresh_token
+          in: query
+          description: Globus transfer refresh token
+          required: true
+          schema:
+            type: string
         - name: limit
           in: query
           description: pagination limit
@@ -312,6 +323,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: refresh_token
+          in: query
+          description: Globus transfer refresh token
+          required: true
+          schema:
+            type: string
         - name: recurse
           in: query
           description: remove the directory and all subdirectories
@@ -343,7 +360,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/ops/{client_id}/{endpoint_id}/mkdir':
     post:
       tags:
         - File Operations
@@ -370,6 +386,12 @@ paths:
         - name: access_token
           in: query
           description: Globus transfer access token
+          required: true
+          schema:
+            type: string
+        - name: refresh_token
+          in: query
+          description: Globus transfer refresh token
           required: true
           schema:
             type: string
@@ -403,8 +425,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/ops/{client_id}/{endpoint_id}/rename':
-    post:
+    put:
       tags:
         - File Operations
       summary: Rename a path
@@ -431,6 +452,12 @@ paths:
         - name: access_token
           in: query
           description: Globus transfer access token
+          required: true
+          schema:
+            type: string
+        - name: refresh_token
+          in: query
+          description: Globus transfer refresh token
           required: true
           schema:
             type: string
