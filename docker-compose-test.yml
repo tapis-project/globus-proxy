@@ -12,10 +12,10 @@ services:
       - ./configschema.json:/home/tapis/configschema.json
       - ./config-local.json:/home/tapis/config.json
       - ./service.log:/home/tapis/service.log
-  endpoint1:
-    image: centos7
-    ports:
-      - "8000:8000"
+  # endpoint1:
+  #   image: centos7
+  #   ports:
+  #     - "8000:8000"
     
     
 

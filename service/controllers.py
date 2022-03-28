@@ -144,7 +144,7 @@ class CheckTokensResource(Resource):
             
 
 class OpsResource(Resource):
-    def ops_precheck(self, client_id, access_token, refresh_token):
+    def ops_precheck(self, client_id, endpoint_id, access_token, refresh_token):
         '''
         Performs several precheck opertations such as
             making sure the tokens are valid and exchanging an expired access token for an active one
@@ -162,7 +162,7 @@ class OpsResource(Resource):
                 msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
             )
             # TODO: handle more exceptions, figure out how to make them nice for the calling function
-        
+
         # get transfer client
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
@@ -171,13 +171,28 @@ class OpsResource(Resource):
             return utils.error(
                 msg='Exception while generating authorization. Please check your request syntax and try again'
             )
+        
+        # activate endpoint
+        try:
+            result = transfer_client.endpoint_autoactivate(endpoint_id)
+            if result['code'] == "AutoActivationFailed":
+                raise AuthenticationError
+        except AuthenticationError as e:
+            logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
+            return utils.error(
+                msg=f'Endpoint {endpoint_id} must be manually activated'
+            )
+        except Exception as e:
+            pass
+            # TODO: handle excpetions. 
+        
         # return trans client
-        else:
-            return transfer_client
+        return transfer_client
 
     # ls
     def get(self, client_id, endpoint_id, path):
         # parse args & perform precheck
+        logger.debug(f'in ls with path:: {path}')
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
@@ -187,7 +202,7 @@ class OpsResource(Resource):
                 msg='Exception while parsing request parameters. Please check your request syntax and try again'
                 )
         try:
-            transfer_client = self.ops_precheck(client_id, access_token, refresh_token)
+            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             return utils.error(
@@ -196,6 +211,9 @@ class OpsResource(Resource):
         except Exception as e:
             pass
             # TODO: handle more exceptions?
+
+        # TODO: make sure the endpoint is activated before the call
+        # use autoactivate 
 
         # perform ls op
         try:
@@ -205,15 +223,24 @@ class OpsResource(Resource):
                 path=path
             )
         except TransferAPIError as e:
-            logger.error(f'transfer api error for client {client_id}: {e}')
+            logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
+            # api errors come through as specific codes, each one can be handled separately 
             if e.code == "AuthenticationFailed":
                 return utils.error(
                     msg='Could not authenticate transfer client for ls operation'
                 )
+            elif e.code == "ClientError.NotFound":
+                return utils.error(
+                    msg='Path does not exist on given endpoint'
+                )
+            elif e.code == "ExternalError.DirListingFailed.GCDisconnected":
+                return utils.error(
+                    msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually'
+                )
         except Exception as e:
             logger.error(f'exception while doing ls operation for client {client_id}:: {e}')
             return utils.error(
-                msg='Exception while performing ls operation'
+                msg='Unknown error while performing ls operation'
             )
         else:
             # TODO: send access token back, even if it's the same one
@@ -223,7 +250,8 @@ class OpsResource(Resource):
                 
             return utils.ok(
                 msg='Successfully listed files',
-                result=result.data
+                result=result.data,
+                metadata={'access_token': access_token}
             )
             
         return utils.error(
@@ -231,38 +259,117 @@ class OpsResource(Resource):
         )
 
     # mkdir
-    def post(self, client_id, endpoint_id, access_token, path):
+    def post(self, client_id, endpoint_id, path):
         # parse args and perform precheck
+        logger.debug(f'in mkdir, have path:: {path}')
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
         if not access_token or not refresh_token:
-            logger.error('error parsing args. Check syntax and try again')
+            logger.error('error parsing args')
             return utils.error(
                 msg='Exception while parsing request parameters. Please check your request syntax and try again'
                 )
 
         try:
-            transfer_client = self.ops_precheck(client_id, access_token, refresh_token)
+            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             return utils.error(
                 msg='Given tokens are not valid. Try again with active auth tokens'
             )
         except Exception as e:
-            pass
+            return utils.error(f'exception while performink mkdir operation for client {client_id} at path {path}:: {e}')
             # TODO: handle more exceptions?
 
         # perform mkdir op
         try:
-            transfer_client.operation_mkdir(
+            result = transfer_client.operation_mkdir(
                 endpoint_id=endpoint_id,
                 path=path
             )
-        except:
-            pass
+        except TransferAPIError as e:
+            logger.error(f'transfer api error for client {client_id}: {e}')
+            if e.code == "AuthenticationFailed":
+                return utils.error(
+                    msg='Could not authenticate transfer client for mkdir operation'
+                )
+            # TODO: handle the path already existing
+        except Exception as e:
+            logger.error(f'exception while performink mkdir operation for client {client_id} at path {path}:: {e}')
+            return utils.error(
+                msg=f'Unknown error while performing mkdir operation at path {path}'
+            )
         else:
-            pass
+            return utils.ok(
+                msg=f'Successfully created directory at {path}',
+                result=result.data,
+                metadata={'access_token': access_token}
+            )
+        return utils.error(
+            msg=f'exception while performink mkdir operation for client {client_id} at path {path}'
+        )
+
+    def delete(self, client_id, endpoint_id, path):
+        # parse args and perform precheck
+        logger.debug(f'in delete, have path:: {path}')
+        transfer_client = None
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        if not access_token or not refresh_token:
+            logger.error('error parsing args')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+
+        try:
+            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            return utils.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
+            # TODO: handle more exceptions?
+
+        # perform delete
+        transfer_client.submit_delete()
+
+    def put(self, client_id, endpoint_id, path):
+        logger.debug(f'in put (rename) have path {path}')
+
+        # parse args and perform precheck
+        transfer_client = None
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        dest = request.args.get('dest')
+        if not access_token or not refresh_token:
+            logger.error('error parsing args')
+            return utils.error(
+                msg='Exception while parsing request parameters. Please check your request syntax and try again'
+                )
+
+        try:
+            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+        except AuthenticationError:
+            logger.error(f'Invalid token given for client {client_id}')
+            return utils.error(
+                msg='Given tokens are not valid. Try again with active auth tokens'
+            )
+        except Exception as e:
+            return utils.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
+            # TODO: handle more exceptions?
+
+        # perform rename
+        try:
+            globus_sdk.operation_rename(endpoint_id, path, dest)
+        except Exception as e:
+            logger.error(f'exception in rename with client {client_id}, endpoint {endpoint_id} and path {path}:: {e}')
+            return utils.error(
+                msg='Unknown error while performing rename'
+            )
+
 
 
 

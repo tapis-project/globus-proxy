@@ -187,7 +187,7 @@ paths:
                 $ref: '#/components/schemas/RespBasic'
 
   # --- Paths for File Operations -----------------------------------------------------
-  '/v3/globus-proxy/ops/{endpoint_id}/{path}':
+  '/v3/globus-proxy/ops/{cleint_id}/{endpoint_id}/{path}':
     get:
       tags:
         - File Operations
@@ -214,6 +214,12 @@ paths:
         - name: access_token
           in: query
           description: Globus transfer access token
+          required: true
+          schema:
+            type: string
+        - name: refresh_token
+          in: query
+          description: Globus transfer refresh token
           required: true
           schema:
             type: string
@@ -283,6 +289,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: refresh_token
+          in: query
+          description: Globus transfer refresh token
+          required: true
+          schema:
+            type: string
         - name: recurse
           in: query
           description: remove the directory and all subdirectories
@@ -314,7 +326,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/ops/{endpoint_id}/mkdir':
     post:
       tags:
         - File Operations
@@ -335,6 +346,12 @@ paths:
         - name: access_token
           in: query
           description: Globus transfer access token
+          required: true
+          schema:
+            type: string
+        - name: refresh_token
+          in: query
+          description: Globus transfer refresh token
           required: true
           schema:
             type: string
@@ -368,8 +385,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/ops/{endpoint_id}/rename':
-    post:
+    put:
       tags:
         - File Operations
       summary: Rename a path
@@ -390,6 +406,12 @@ paths:
         - name: access_token
           in: query
           description: Globus transfer access token
+          required: true
+          schema:
+            type: string
+        - name: refresh_token
+          in: query
+          description: Globus transfer refresh token
           required: true
           schema:
             type: string
