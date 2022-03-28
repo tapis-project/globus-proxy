@@ -1017,7 +1017,11 @@ components:
       properties:
         url:
           type: string
+<<<<<<< Updated upstream
         sessionId:
+=======
+        session_id:
+>>>>>>> Stashed changes
           type: string
     RespAuthTokens:
       type: object
