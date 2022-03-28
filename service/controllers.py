@@ -310,6 +310,7 @@ class OpsResource(Resource):
             msg=f'exception while performink mkdir operation for client {client_id} at path {path}'
         )
 
+    # delete
     def delete(self, client_id, endpoint_id, path):
         # parse args and perform precheck
         logger.debug(f'in delete, have path:: {path}')
@@ -336,6 +337,7 @@ class OpsResource(Resource):
         # perform delete
         transfer_client.submit_delete()
 
+    # rename
     def put(self, client_id, endpoint_id, path):
         logger.debug(f'in put (rename) have path {path}')
 
@@ -358,7 +360,7 @@ class OpsResource(Resource):
                 msg='Given tokens are not valid. Try again with active auth tokens'
             )
         except Exception as e:
-            return utils.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
+            return utils.error(f'exception while performing rename operation for client {client_id} at path {path}:: {e}')
             # TODO: handle more exceptions?
 
         # perform rename

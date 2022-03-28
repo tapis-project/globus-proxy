@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.0.2
 info:
   title: Tapis Globus Proxy API
   description: The Tapis Globus Proxy API proxies calls to Globus coming from a Tapis service.
@@ -187,7 +187,7 @@ paths:
                 $ref: '#/components/schemas/RespBasic'
 
   # --- Paths for File Operations -----------------------------------------------------
-  '/v3/globus-proxy/ops/{cleint_id}/{endpoint_id}/{path}':
+  '/v3/globus-proxy/ops/{client_id}/{endpoint_id}/{path}':
     get:
       tags:
         - File Operations
@@ -197,6 +197,13 @@ paths:
         Access token must be provided as a query parameter.
       operationId: listFiles
       parameters:
+        - name: client_id
+          in: path
+          description: Client Id
+          required: true 
+          schema:
+            type: string
+          example: "64e62dad-9a10-42c4-823e-411f77bfa263"
         - name: endpoint_id
           in: path
           description: Endpoint Id
