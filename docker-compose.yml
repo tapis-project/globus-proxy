@@ -13,3 +13,11 @@ services:
             - ./config-local.json:/home/tapis/config.json
             - ./service.log:/home/tapis/service.log
 
+    # globus_proxy-tests:
+    #     build: 
+    #         context: ./
+    #         dockerfile: ./Dockerfile-test
+    #     volumes:
+    #         - ./config-local.json:/home/tapis/config.json
+
+

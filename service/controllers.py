@@ -196,6 +196,9 @@ class OpsResource(Resource):
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
+        limit = request.args.get('limit')
+        offset = request.args.get('offset')
+        filter = request.args.get('filter')
         if not access_token or not refresh_token:
             logger.error('error parsing args. Check syntax and try again')
             return utils.error(
@@ -212,19 +215,27 @@ class OpsResource(Resource):
             pass
             # TODO: handle more exceptions?
 
-        # TODO: make sure the endpoint is activated before the call
-        # use autoactivate 
-
         # perform ls op
         try:
+            query_dict = {}
+            if limit: 
+                query_dict['limit'] = limit
+            if offset:
+                query_dict['offset'] = offset
+            logger.debug(f'have query dict:: {query_dict}')
             # call operation_ls to make the directory
+            #TODO: Fix query params not doing anything
             result = transfer_client.operation_ls(
                 endpoint_id=(endpoint_id),
-                path=path
+                path=path,
+                filter=filter,
+                query_params=query_dict if query_dict != {} else None
             )
+            logger.debug(f'got result::{result}')
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately 
+            # TODO: change this to be a handle function so that I dont have to repeat all this code
             if e.code == "AuthenticationFailed":
                 return utils.error(
                     msg='Could not authenticate transfer client for ls operation'
@@ -317,6 +328,7 @@ class OpsResource(Resource):
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
+        recurse = request.args.get('recurse')
         if not access_token or not refresh_token:
             logger.error('error parsing args')
             return utils.error(
@@ -334,18 +346,26 @@ class OpsResource(Resource):
             return utils.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
             # TODO: handle more exceptions?
 
+        # TODO: support recurse by using the ls op to create a delete doc??
         # perform delete
-        transfer_client.submit_delete()
-
+        try:
+            transfer_client.submit_delete()
+        except Exception as e:
+            logger.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
+            return utils.error(
+                msg=f'Unknown error performing delete operation'
+            )
+        return utils.ok(
+            msg='Successfully dleeted path'
+        )
     # rename
     def put(self, client_id, endpoint_id, path):
-        logger.debug(f'in put (rename) have path {path}')
-
         # parse args and perform precheck
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
-        dest = request.args.get('dest')
+        dest = request.json.get('destination')
+        # logger.debug(f'in put (rename) have path {path} and dest {dest} given form {request.form} given values {request.values} given json {request.json}')
         if not access_token or not refresh_token:
             logger.error('error parsing args')
             return utils.error(
@@ -365,16 +385,36 @@ class OpsResource(Resource):
 
         # perform rename
         try:
-            globus_sdk.operation_rename(endpoint_id, path, dest)
+            transfer_client.operation_rename(endpoint_id, oldpath=path, newpath=dest)
         except Exception as e:
             logger.error(f'exception in rename with client {client_id}, endpoint {endpoint_id} and path {path}:: {e}')
             return utils.error(
                 msg='Unknown error while performing rename'
             )
+        return utils.ok(
+            msg=f'Successfully renamed file'
+        )
 
 
+class TransferResource(Resource):
+    def post(client_id, endpoint_id):
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('access_token')
+        transfer_client = OpsResource.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+        
+        try:
+            transfer_client.submit_transfer()
+        except Exception as e:
+            logger.error(f'exception while submitting transfer with client id {client_id}, endpoint id {endpoint_id}:: {e}')
+            return utils.erorr(
+                msg=f'Unknown error submitting transfer job'
+            )
 
+    def get(client_id, task_id):
+        pass
 
+    def delete(client_id, task_id):
+        pass
 
 
 
