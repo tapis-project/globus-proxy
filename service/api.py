@@ -29,6 +29,7 @@ api.add_resource(AuthURLResource, '/v3/globus-proxy/auth/url/<client_id>')
 api.add_resource(TokensResource, '/v3/globus-proxy/auth/tokens/<client_id>/<session_id>/<auth_code>')
 api.add_resource(CheckTokensResource, '/v3/globus-proxy/auth/check_tokens/<endpoint_id>')
 api.add_resource(OpsResource, '/v3/globus-proxy/ops/<client_id>/<endpoint_id>/<regex("(.+)"):path>')
+api.add_resource(TransferResource, '/v3/globus-proxy/transfers/<client_id>')
 
 
 # Health checks

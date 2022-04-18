@@ -328,7 +328,7 @@ class OpsResource(Resource):
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
-        recurse = request.args.get('recurse')
+        recurse = request.args.get('recurse', False)
         if not access_token or not refresh_token:
             logger.error('error parsing args')
             return utils.error(
@@ -346,17 +346,24 @@ class OpsResource(Resource):
             return utils.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
             # TODO: handle more exceptions?
 
-        # TODO: support recurse by using the ls op to create a delete doc??
         # perform delete
         try:
-            transfer_client.submit_delete()
+            delete_task = globus_sdk.DeleteData(
+                transfer_client=transfer_client,
+                endpoint=endpoint_id,
+                recursive=recurse
+            )
+            delete_task.add_item(path)
+            logger.debug(f'have delete task:: {delete_task}')
+            result = transfer_client.submit_delete(delete_task)
         except Exception as e:
             logger.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
             return utils.error(
                 msg=f'Unknown error performing delete operation'
             )
         return utils.ok(
-            msg='Successfully dleeted path'
+            result=result.data,
+            msg='Successfully deleted path'
         )
     # rename
     def put(self, client_id, endpoint_id, path):
@@ -397,15 +404,27 @@ class OpsResource(Resource):
 
 
 class TransferResource(Resource):
-    def post(client_id, endpoint_id):
+    def post(self, client_id):
+        logger.debug(f'in transfer POST with args:: {request.args}')
         access_token = request.args.get('access_token')
-        refresh_token = request.args.get('access_token')
-        transfer_client = OpsResource.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+        refresh_token = request.args.get('refresh_token')
+        src = request.json.get('source_endpoint')
+        dest = request.json.get('destination_endpoint')
+        items = request.json.get('transfer_items')
+
+        logger.debug(f'have setup args \n{access_token}\n{refresh_token}\n{src}\n{dest}\n{items}')
+
+        transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
+        transfer_data = globus_sdk.TransferData(transfer_client, src, dest)
+        for item in items:
+            transfer_data.add_item(item['source_path'], item['destination_path'], item['recursive'])
+
+        logger.debug(f'have transfer data {transfer_data}')
         
         try:
-            transfer_client.submit_transfer()
+            transfer_client.submit_transfer(transfer_data)
         except Exception as e:
-            logger.error(f'exception while submitting transfer with client id {client_id}, endpoint id {endpoint_id}:: {e}')
+            logger.error(f'exception while submitting transfer with client id {client_id}, source endpoint {src}, destination endpoint {dest}:: {e}')
             return utils.erorr(
                 msg=f'Unknown error submitting transfer job'
             )
