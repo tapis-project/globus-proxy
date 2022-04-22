@@ -1,5 +1,6 @@
 from ast import Pass
 import json
+from os import access
 import traceback
 
 from flask import Flask, current_app, request
@@ -12,7 +13,7 @@ from tapisservice.logs import get_logger
 import globus_sdk
 from globus_sdk import TransferAPIError
 
-from utils import check_tokens, get_transfer_client
+from utils import check_tokens, get_transfer_client, transfer
 
 from multiprocessing import AuthenticationError
 
@@ -405,7 +406,6 @@ class OpsResource(Resource):
 
 class TransferResource(Resource):
     def post(self, client_id):
-        logger.debug(f'in transfer POST with args:: {request.args}')
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
         src = request.json.get('source_endpoint')
@@ -414,26 +414,62 @@ class TransferResource(Resource):
 
         logger.debug(f'have setup args \n{access_token}\n{refresh_token}\n{src}\n{dest}\n{items}')
 
+        # TODO: add the error handling here instead?
         transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
-        transfer_data = globus_sdk.TransferData(transfer_client, src, dest)
-        for item in items:
-            transfer_data.add_item(item['source_path'], item['destination_path'], item['recursive'])
+        result = transfer(transfer_client, src, dest, items)
 
-        logger.debug(f'have transfer data {transfer_data}')
-        
+        return utils.ok(
+            result=result.data,
+            msg=f'Successfully completed transfer'
+        )
+
+class ModifyTransferResource(Resource):
+    def get(self, client_id, task_id):
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        # transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
         try:
-            transfer_client.submit_transfer(transfer_data)
+            transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
-            logger.error(f'exception while submitting transfer with client id {client_id}, source endpoint {src}, destination endpoint {dest}:: {e}')
-            return utils.erorr(
-                msg=f'Unknown error submitting transfer job'
+            logger.debug(f'error while getting transfer client for client id {client_id}: {e}')
+            return utils.error(
+                msg='Error while authenticating globus client'
             )
+        try:
+            result = transfer_client.get_task(task_id)
+        except Exception as e:
+            logger.debug(f'error while getting transfer task with id {task_id}: {e}')
+            return utils.error(
+                msg='Error retrieving transfer task'
+            )
+        return utils.ok(
+            result=result.data,
+            msg='successfully retrieved transfer task'
+        )
+        
 
-    def get(client_id, task_id):
-        pass
-
-    def delete(client_id, task_id):
-        pass
+    def delete(self, client_id, task_id):
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        # transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
+        try:
+            transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+        except Exception as e:
+            logger.debug(f'error while getting transfer client for client id {client_id}: {e}')
+            return utils.error(
+                msg='Error while authenticating globus client'
+            )
+        try:
+            result = transfer_client.cancel_task(task_id)
+        except Exception as e:
+            logger.debug(f'error while canceling transfer task with id {task_id}: {e}')
+            return utils.error(
+                msg='Error retrieving transfer task'
+            )
+        return utils.ok(
+            result=result.data,
+            msg='successfully canceled transfer task'
+        )
 
 
 

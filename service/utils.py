@@ -61,3 +61,42 @@ def get_valid_token(client_id, refresh_token):
     client = globus_sdk.NativeAppAuthClient(client_id=client_id)
     response = client.oauth2_refresh_token(refresh_token)
     return response['transfer.api.globus.org']['access_token']
+
+# stolen from neid code
+
+def ls_endpoint(tc, ep_id, path="~"):
+    ls = tc.operation_ls(ep_id, path=path)
+    return ls
+    
+def transfer(tc, source_endpoint_id, dest_endpoint_id, files='', dirs='', label='', sync_level="size",verify_checksum=False):  
+    '''
+    # verify_checksum for now. if there's a bottleneck, reconsider
+    '''
+    '''
+    start globus file transfer
+    files is a list of dictionaries with the format {source: "/source/path/file.txt", dest: "/dest/path/file.txt"}
+    dirs is a list of dictionaries with the format {source: "/source/path/dir", dest: "/dest/path/dir"}
+    '''
+    tdata = globus_sdk.TransferData(tc, source_endpoint_id, dest_endpoint_id, label=label, sync_level=sync_level, verify_checksum=verify_checksum)
+    for file in files:
+        try:
+            # print('before ls ep init')
+            ls_endpoint(tc, dest_endpoint_id, path=file['destination_path'].rsplit('/', 1)[0])
+            # logger.debug('after ls endpoint init')
+        except Exception as e:
+            print(file)
+            return ('File Transfer Failed: {}'.format(e))
+        # logger.debug('before add item')
+        tdata.add_item(file['source_path'], file['destination_path'])
+        # logger.debug('after add item')
+    for dir in dirs:
+        try:
+            
+            ls_endpoint(tc, dest_endpoint_id, _path=dir['source_path'])
+        except Exception as e:
+            logger.debug('Problem with remote directory: {}'.format(dir['source_path']))
+            return ('Dir Transfer Failed: {}'.format(e))
+        tdata.add_item(dir['source_path'], dir['destination_path'], recursive=True)
+    transfer_result = tc.submit_transfer(tdata)
+    return transfer_result
+
