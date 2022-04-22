@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 import globus_sdk
 
 from tapisservice.logs import get_logger
+from tapisservice.tapisflask import utils
+
 logger = get_logger(__name__)
 
 def get_transfer_client(client_id, refresh_token, access_token):
@@ -99,4 +101,84 @@ def transfer(tc, source_endpoint_id, dest_endpoint_id, files='', dirs='', label=
         tdata.add_item(dir['source_path'], dir['destination_path'], recursive=True)
     transfer_result = tc.submit_transfer(tdata)
     return transfer_result
+
+def activate_endpoint(tc, ep_id, username, password):
+    '''
+    ... with userame and password
+    '''
+    activation_req = tc.endpoint_get_activation_requirements(ep_id).data
+    for data in activation_req["DATA"]:
+        if data["type"] == "myproxy":
+            if data["name"] == "username":
+                data["value"] = username
+            if data["name"] == "passphrase":
+                data["value"] = password
+    try:
+        tr = tc.endpoint_activate(ep_id, activation_req)
+    except Exception as e:
+        print(e)
+        print("Endpoint requires manual activation, please open "
+              "the following URL in a browser to activate the "
+              "endpoint: \n")
+        print("https://app.globus.org/file-manager?origin_id=%s" % ep_id)
+        input("Press ENTER after activating the endpoint:")
+        r = tc.endpoint_autoactivate(ep_id, if_expires_in=3600)
+        print(r)
+        return r
+    return tr
+
+
+def is_endpoint_activated(tc, ep):
+    '''
+    check if globus endpoint is activated
+    '''
+    endpoint = tc.get_endpoint(ep)
+    return endpoint['activated']
+
+def precheck(client_id, endpoint_id, access_token, refresh_token):
+        '''
+        Performs several precheck opertations such as
+            making sure the tokens are valid and exchanging an expired access token for an active one
+            activating a transfer client
+        
+        returns authenticated transfer client
+        '''
+        # check token validity
+        try:
+            access_token, refresh_token = check_tokens(client_id, refresh_token, access_token)
+        except AuthenticationError:
+            # refresh token is invalid, must redo auth process
+            logger.error(f'exception while validating tokens:: {e}')
+            return utils.error(
+                msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
+            )
+            # TODO: handle more exceptions, figure out how to make them nice for the calling function
+
+        # get transfer client
+        try:
+            transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+        except Exception as e:
+            logger.error(f'unable to get transfer client or client {client_id}: {e}')
+            return utils.error(
+                msg='Exception while generating authorization. Please check your request syntax and try again'
+            )
+        
+        # activate endpoint
+        if not is_endpoint_activated(transfer_client, endpoint_id):
+            try:
+                result = transfer_client.endpoint_autoactivate(endpoint_id)
+                if result['code'] == "AutoActivationFailed":
+                    raise AuthenticationError
+            except AuthenticationError as e:
+                logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
+                return utils.error(
+                    msg=f'Endpoint {endpoint_id} must be manually activated'
+                )
+            except Exception as e:
+                pass
+                # TODO: handle excpetions. 
+        
+        # return trans client
+        return transfer_client
+
 

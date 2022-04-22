@@ -424,6 +424,9 @@ class TransferResource(Resource):
         )
 
 class ModifyTransferResource(Resource):
+    # TODO: 
+    # Make sure tokens are valid
+    # 
     def get(self, client_id, task_id):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
@@ -451,7 +454,6 @@ class ModifyTransferResource(Resource):
     def delete(self, client_id, task_id):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
-        # transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
