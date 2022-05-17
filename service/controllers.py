@@ -419,9 +419,7 @@ class TransferResource(Resource):
         logger.debug(f'have setup args \n{access_token}\n{refresh_token}\n{src}\n{dest}\n{items}')
 
         # TODO: add the error handling here instead?
-        logger.debug('before preheck')
         transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
-        logger.debug('after precheck')
         if not is_endpoint_activated(transfer_client, src):
             logger.debug('src is not active')
             autoactivate_endpoint(transfer_client, src)
