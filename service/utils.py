@@ -135,7 +135,7 @@ def is_endpoint_activated(tc, ep):
     endpoint = tc.get_endpoint(ep)
     return endpoint['activated']
 
-def precheck(client_id, endpoint_id, access_token, refresh_token):
+def precheck(client_id, endpoints, access_token, refresh_token):
         '''
         Performs several precheck opertations such as
             making sure the tokens are valid and exchanging an expired access token for an active one
@@ -164,21 +164,31 @@ def precheck(client_id, endpoint_id, access_token, refresh_token):
             )
         
         # activate endpoint
-        if not is_endpoint_activated(transfer_client, endpoint_id):
-            try:
-                result = transfer_client.endpoint_autoactivate(endpoint_id)
-                if result['code'] == "AutoActivationFailed":
-                    raise AuthenticationError
-            except AuthenticationError as e:
-                logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
-                return utils.error(
-                    msg=f'Endpoint {endpoint_id} must be manually activated'
-                )
-            except Exception as e:
-                pass
-                # TODO: handle excpetions. 
-        
-        # return trans client
-        return transfer_client
+        if not isinstance(endpoints, list):
+            # convert to list if only given single endpoint_id as string
+            endpoints = list(endpoints)
+        for endpoint_id in endpoints:
+            if not is_endpoint_activated(transfer_client, endpoint_id):
+                logger.debug(f'ep {endpoint_id} is not active')
+                autoactivate_endpoint(transfer_client, endpoint_id)
+            
+
+def autoactivate_endpoint(transfer_client, endpoint_id):
+    try:
+        result = transfer_client.endpoint_autoactivate(endpoint_id)
+        if result['code'] == "AutoActivationFailed":
+            raise AuthenticationError
+    except AuthenticationError as e:
+        logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
+        return utils.error(
+            msg=f'Endpoint {endpoint_id} must be manually activated'
+        )
+    except Exception as e:
+        logger.debug(f'Unknown exception activating endpoint with id {endpoint_id}')
+        pass
+        # TODO: handle excpetions. 
+
+    # return transfer client
+    return transfer_client
 
 

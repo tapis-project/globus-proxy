@@ -13,7 +13,7 @@ from tapisservice.logs import get_logger
 import globus_sdk
 from globus_sdk import TransferAPIError
 
-from utils import check_tokens, get_transfer_client, transfer
+from utils import check_tokens, get_transfer_client, transfer, is_endpoint_activated, autoactivate_endpoint
 
 from multiprocessing import AuthenticationError
 
@@ -68,18 +68,20 @@ class TokensResource(Resource):
 
         # get access / refresh tokens
         try:
-            token_response = client.oauth2_exchange_code_for_tokens(auth_code)
+            token_response = client.oauth2_exchange_code_for_tokens(auth_code).by_resource_server
         except globus_sdk.services.auth.errors.AuthAPIError:
             return utils.error(
                 msg = 'Invalid auth code given for client'
             )
         else:
             try:
-                logger.debug(token_response)
                 access_token = token_response['transfer.api.globus.org']['access_token']
                 refresh_token = token_response['transfer.api.globus.org']['refresh_token']
-            except KeyError:
-                logger.error('Could not parse tokens from ')
+            except KeyError as e:
+                logger.error(f'Could not parse tokens from response:: {e}')
+                return utils.error(
+                    msg='Internal server error'
+                )
         
         return utils.ok(
                 result = {"access_token": access_token, "refresh_token": refresh_token}, 
@@ -405,6 +407,8 @@ class OpsResource(Resource):
 
 
 class TransferResource(Resource):
+    # TODO: make sure that the eps are activated before starting anything
+    # TODO make sure that the tokens are valid
     def post(self, client_id):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
@@ -415,8 +419,22 @@ class TransferResource(Resource):
         logger.debug(f'have setup args \n{access_token}\n{refresh_token}\n{src}\n{dest}\n{items}')
 
         # TODO: add the error handling here instead?
+        logger.debug('before preheck')
         transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
-        result = transfer(transfer_client, src, dest, items)
+        logger.debug('after precheck')
+        if not is_endpoint_activated(transfer_client, src):
+            logger.debug('src is not active')
+            autoactivate_endpoint(transfer_client, src)
+        if not is_endpoint_activated(transfer_client, dest): 
+            logger.debug('dest is not active')   
+            autoactivate_endpoint(transfer_client, dest)
+        result = (transfer(transfer_client, src, dest, items))
+        if "File Transfer Failed" in result:
+            logger.error(f'File transfer failed due to {result}')
+            return utils.error(
+                msg='File transfer failed'
+            )
+        logger.debug(f'got res:: {result}')
 
         return utils.ok(
             result=result.data,
@@ -472,14 +490,6 @@ class ModifyTransferResource(Resource):
             result=result.data,
             msg='successfully canceled transfer task'
         )
-
-
-
-
-
-
-
-
 
 
 

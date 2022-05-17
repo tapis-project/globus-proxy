@@ -1,4 +1,4 @@
-FROM tapis/flaskbase-plugins
+FROM tapis/flaskbase
 
 
 ADD requirements.txt /home/tapis/requirements.txt
