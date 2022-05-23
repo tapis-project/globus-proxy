@@ -149,50 +149,50 @@ class CheckTokensResource(Resource):
 
 class OpsResource(Resource):
     # TODO: Switch to using utils.precheck instead for ops things
-    def ops_precheck(self, client_id, endpoint_id, access_token, refresh_token):
-        '''
-        Performs several precheck opertations such as
-            making sure the tokens are valid and exchanging an expired access token for an active one
-            activating a transfer client
+    # def ops_precheck(self, client_id, endpoint_id, access_token, refresh_token):
+    #     '''
+    #     Performs several precheck opertations such as
+    #         making sure the tokens are valid and exchanging an expired access token for an active one
+    #         activating a transfer client
         
-        returns authenticated transfer client
-        '''
-        # check token validity
-        try:
-            access_token, refresh_token = check_tokens(client_id, refresh_token, access_token)
-        except AuthenticationError:
-            # refresh token is invalid, must redo auth process
-            logger.error(f'exception while validating tokens:: {e}')
-            return utils.error(
-                msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
-            )
-            # TODO: handle more exceptions, figure out how to make them nice for the calling function
+    #     returns authenticated transfer client
+    #     '''
+    #     # check token validity
+    #     try:
+    #         access_token, refresh_token = check_tokens(client_id, refresh_token, access_token)
+    #     except AuthenticationError:
+    #         # refresh token is invalid, must redo auth process
+    #         logger.error(f'exception while validating tokens:: {e}')
+    #         return utils.error(
+    #             msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
+    #         )
+    #         # TODO: handle more exceptions, figure out how to make them nice for the calling function
 
-        # get transfer client
-        try:
-            transfer_client = get_transfer_client(client_id, refresh_token, access_token)
-        except Exception as e:
-            logger.error(f'unable to get transfer client or client {client_id}: {e}')
-            return utils.error(
-                msg='Exception while generating authorization. Please check your request syntax and try again'
-            )
+    #     # get transfer client
+    #     try:
+    #         transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+    #     except Exception as e:
+    #         logger.error(f'unable to get transfer client or client {client_id}: {e}')
+    #         return utils.error(
+    #             msg='Exception while generating authorization. Please check your request syntax and try again'
+    #         )
         
-        # activate endpoint
-        try:
-            result = transfer_client.endpoint_autoactivate(endpoint_id)
-            if result['code'] == "AutoActivationFailed":
-                raise AuthenticationError
-        except AuthenticationError as e:
-            logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
-            return utils.error(
-                msg=f'Endpoint {endpoint_id} must be manually activated'
-            )
-        except Exception as e:
-            pass
-            # TODO: handle excpetions. 
+    #     # activate endpoint
+    #     try:
+    #         result = transfer_client.endpoint_autoactivate(endpoint_id)
+    #         if result['code'] == "AutoActivationFailed":
+    #             raise AuthenticationError
+    #     except AuthenticationError as e:
+    #         logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
+    #         return utils.error(
+    #             msg=f'Endpoint {endpoint_id} must be manually activated'
+    #         )
+    #     except Exception as e:
+    #         pass
+    #         # TODO: handle excpetions. 
         
-        # return trans client
-        return transfer_client
+    #     # return trans client
+    #     return transfer_client
 
     # ls
     def get(self, client_id, endpoint_id, path):
@@ -290,7 +290,7 @@ class OpsResource(Resource):
                 )
 
         try:
-            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+            transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             return utils.error(
@@ -343,7 +343,7 @@ class OpsResource(Resource):
                 )
 
         try:
-            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+            transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             return utils.error(
@@ -358,7 +358,7 @@ class OpsResource(Resource):
             delete_task = globus_sdk.DeleteData(
                 transfer_client=transfer_client,
                 endpoint=endpoint_id,
-                recursive=recurse
+                recursive=bool(recurse)
             )
             delete_task.add_item(path)
             logger.debug(f'have delete task:: {delete_task}')
@@ -370,7 +370,7 @@ class OpsResource(Resource):
             )
         return utils.ok(
             result=result.data,
-            msg='Successfully deleted path'
+            msg='Success'
         )
     # rename
     def put(self, client_id, endpoint_id, path):
@@ -387,7 +387,7 @@ class OpsResource(Resource):
                 )
 
         try:
-            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+            transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             return utils.error(
@@ -399,14 +399,15 @@ class OpsResource(Resource):
 
         # perform rename
         try:
-            transfer_client.operation_rename(endpoint_id, oldpath=path, newpath=dest)
+            result = transfer_client.operation_rename(endpoint_id, oldpath=path, newpath=dest)
         except Exception as e:
             logger.error(f'exception in rename with client {client_id}, endpoint {endpoint_id} and path {path}:: {e}')
             return utils.error(
                 msg='Unknown error while performing rename'
             )
         return utils.ok(
-            msg=f'Successfully renamed file'
+            msg=f'Success',
+            result = result.data
         )
 
 

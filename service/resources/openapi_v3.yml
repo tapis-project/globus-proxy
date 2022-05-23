@@ -402,11 +402,6 @@ paths:
           required: true
           schema:
             type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReqMakeDir'
       responses:
         '200':
           description: Success
@@ -995,7 +990,6 @@ components:
           example: "/dirA/dirB"
     ReqRename:
       required:
-        - source_path
         - destination_path
       type: object
       properties:
