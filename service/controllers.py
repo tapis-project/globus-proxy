@@ -148,6 +148,7 @@ class CheckTokensResource(Resource):
             
 
 class OpsResource(Resource):
+    # TODO: Switch to using utils.precheck instead for ops things
     def ops_precheck(self, client_id, endpoint_id, access_token, refresh_token):
         '''
         Performs several precheck opertations such as
