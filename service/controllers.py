@@ -210,7 +210,8 @@ class OpsResource(Resource):
                 msg='Exception while parsing request parameters. Please check your request syntax and try again'
                 )
         try:
-            transfer_client = self.ops_precheck(client_id, endpoint_id, access_token, refresh_token)
+            transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
+            logger.debug(f'have tc:: {transfer_client}')
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             return utils.error(
@@ -230,6 +231,7 @@ class OpsResource(Resource):
             logger.debug(f'have query dict:: {query_dict}')
             # call operation_ls to make the directory
             #TODO: Fix query params not doing anything
+            logger.debug(f'about to ls, have tc:: {transfer_client}')
             result = transfer_client.operation_ls(
                 endpoint_id=(endpoint_id),
                 path=path,

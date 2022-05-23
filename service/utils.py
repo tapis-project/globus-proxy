@@ -172,7 +172,8 @@ def precheck(client_id, endpoints, access_token, refresh_token):
         if not isinstance(endpoints, list):
             logger.debug('eps are not a list!')
             # convert to list if only given single endpoint_id as string
-            endpoints = list(endpoints)
+            endpoints = list(endpoints.split())
+            logger.debug(f'have ep list:: {endpoints}')
         for endpoint_id in endpoints:
             logger.debug(f'checking ep {endpoint_id}')
             if not is_endpoint_activated(transfer_client, endpoint_id):
