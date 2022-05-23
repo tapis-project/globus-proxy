@@ -132,6 +132,7 @@ def is_endpoint_activated(tc, ep):
     '''
     check if globus endpoint is activated
     '''
+    logger.debug(f'in ep active? have {tc}')
     endpoint = tc.get_endpoint(ep)
     return endpoint['activated']
 
@@ -149,12 +150,14 @@ def precheck(client_id, endpoints, access_token, refresh_token):
         except AuthenticationError:
             # refresh token is invalid, must redo auth process
             logger.error(f'exception while validating tokens:: {e}')
+            # raise AuthenticationError
             return utils.error(
                 msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
             )
             # TODO: handle more exceptions, figure out how to make them nice for the calling function
 
         # get transfer client
+        transfer_client = None
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
@@ -162,27 +165,34 @@ def precheck(client_id, endpoints, access_token, refresh_token):
             return utils.error(
                 msg='Exception while generating authorization. Please check your request syntax and try again'
             )
+        logger.debug(f'in precheck, have tc {transfer_client}')
         
         # activate endpoint
+        logger.debug(f'about to check eps:: {endpoints}')
         if not isinstance(endpoints, list):
+            logger.debug('eps are not a list!')
             # convert to list if only given single endpoint_id as string
             endpoints = list(endpoints)
         for endpoint_id in endpoints:
+            logger.debug(f'checking ep {endpoint_id}')
             if not is_endpoint_activated(transfer_client, endpoint_id):
                 logger.debug(f'ep {endpoint_id} is not active')
                 autoactivate_endpoint(transfer_client, endpoint_id)
+        return transfer_client
             
 
 def autoactivate_endpoint(transfer_client, endpoint_id):
     try:
         result = transfer_client.endpoint_autoactivate(endpoint_id)
+        logger.debug(f'in autoactivate, have res:: {result}')
         if result['code'] == "AutoActivationFailed":
             raise AuthenticationError
     except AuthenticationError as e:
-        logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
-        return utils.error(
-            msg=f'Endpoint {endpoint_id} must be manually activated'
-        )
+        logger.error(f'endpoint activation failed. Endpoint {endpoint_id} must be manuallty activated')
+        # return utils.error(
+        #     msg=f'Endpoint {endpoint_id} must be manually activated'
+        # )
+        raise AuthenticationError
     except Exception as e:
         logger.debug(f'Unknown exception activating endpoint with id {endpoint_id}')
         pass

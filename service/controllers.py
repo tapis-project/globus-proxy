@@ -1,4 +1,5 @@
 from ast import Pass
+from distutils.log import error
 import json
 from os import access
 import traceback
@@ -13,7 +14,7 @@ from tapisservice.logs import get_logger
 import globus_sdk
 from globus_sdk import TransferAPIError
 
-from utils import check_tokens, get_transfer_client, transfer, is_endpoint_activated, autoactivate_endpoint
+from utils import check_tokens, get_transfer_client, precheck, transfer, is_endpoint_activated, autoactivate_endpoint
 
 from multiprocessing import AuthenticationError
 
@@ -419,24 +420,41 @@ class TransferResource(Resource):
         logger.debug(f'have setup args \n{access_token}\n{refresh_token}\n{src}\n{dest}\n{items}')
 
         # TODO: add the error handling here instead?
-        transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
-        if not is_endpoint_activated(transfer_client, src):
-            logger.debug('src is not active')
-            autoactivate_endpoint(transfer_client, src)
-        if not is_endpoint_activated(transfer_client, dest): 
-            logger.debug('dest is not active')   
-            autoactivate_endpoint(transfer_client, dest)
+        transfer_client = None
+        try:
+            transfer_client = precheck(client_id, [src, dest], access_token, refresh_token)
+            logger.debug(f'have tc:: {transfer_client}')
+        except AuthenticationError:
+            return utils.error(
+                msg='Access token invalid. Please provide valid token.'
+            )
+        except Exception as e:
+            logger.debug(f'failed to authenticate transfer client :: {e}')
+            return utils.error(msg='Failed to authenticate transfer client')
+            pass #TODO handle errors?
+
+        try:
+            if not is_endpoint_activated(transfer_client, src):
+                logger.debug('src is not active')
+                autoactivate_endpoint(transfer_client, src)
+            if not is_endpoint_activated(transfer_client, dest): 
+                logger.debug('dest is not active')   
+                autoactivate_endpoint(transfer_client, dest)
+        except AuthenticationError as e:
+            return utils.error(
+                msg='Unable to activate one or more endpoints'
+            )
         result = (transfer(transfer_client, src, dest, items))
         if "File Transfer Failed" in result:
             logger.error(f'File transfer failed due to {result}')
             return utils.error(
                 msg='File transfer failed'
             )
-        logger.debug(f'got res:: {result}')
+        # logger.debug(f'got res:: {result}')
 
         return utils.ok(
             result=result.data,
-            msg=f'Successfully completed transfer'
+            msg=f'Success'
         )
 
 class ModifyTransferResource(Resource):
