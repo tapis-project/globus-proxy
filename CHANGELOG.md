@@ -1,4 +1,4 @@
-1.0.0 - 2022-05-31
+1.2.0 - 2022-05-31
 
 Initial production release of the Tapis Globus-Proxy API
 
