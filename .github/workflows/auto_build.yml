@@ -34,7 +34,7 @@ jobs:
     # if tag == prod release, tag as latest 
     - name: Build the Docker image with latest tag
       if: ${{ steps.extract_branch.outputs.branch == 'prod' }}
-      run: docker build . --file Dockerfile --tag tapis/globus-proxy:latest --tag tapis/glous-proxy:1.2.0
+      run: docker build . --file Dockerfile --tag tapis/globus-proxy:latest --tag tapis/globus-proxy:1.2.0
     
     - name: Push the image to dockerhub
       run: docker push --all-tags tapis/globus-proxy
