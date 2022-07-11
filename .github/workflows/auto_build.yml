@@ -29,7 +29,7 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
     
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag tapis/globus-proxy:{{ steps.extract_branch.outputs.branch }}
+      run: docker build . --file Dockerfile --tag tapis/globus-proxy:${{ steps.extract_branch.outputs.branch }}
       
     # if tag == prod release, tag as latest 
     - name: Build the Docker image with latest tag
