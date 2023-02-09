@@ -98,7 +98,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespBasic'
-  '/v3/globus-proxy/auth/tokens/${client_id}/${session_id}/${auth_code}':
+  '/v3/globus-proxy/auth/tokens/{client_id}/{session_id}/{auth_code}':
 # Python SDK:
 #auth_code = input("Please enter the code you get after login here: ").strip()
 #token_response = client.oauth2_exchange_code_for_tokens(auth_code)
