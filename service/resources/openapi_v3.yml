@@ -1113,13 +1113,20 @@ components:
         message:
           type: string
         result:
-          type: array
+          type: object
           items:
-            $ref: '#/components/schemas/GlobusFileInfo'
+            $ref: '#/components/schemas/RespFileListData'
         version:
           type: string
         metadata:
           type: object
+    RespFileListData:
+      type: object
+      properties:
+        DATA:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlobusFileInfo'
     RespTransferTask:
       type: object
       properties:
