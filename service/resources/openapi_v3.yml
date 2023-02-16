@@ -195,7 +195,7 @@ paths:
       summary: List files at path
       description: |
         List files for an endpoint at given path relative to the default directory of the endpoint.
-        Access token must be provided as a query parameter.
+        Access token and refresh token must be provided as a query parameters.
       operationId: listFiles
       parameters:
         - name: client_id
@@ -287,7 +287,7 @@ paths:
       summary: Delete a path
       description: |
         Delete a file or directory on an endpoint at path {path} relative to the default directory.
-        Access token must be provided as a query parameter.
+        Access token and refresh token must be provided as a query parameters.
       operationId: deletePath
       parameters:
         - name: client_id
@@ -361,7 +361,7 @@ paths:
         Rename a file or directory on the endpoint. Paths are relative to the endpoint default directory.
         Source and destination paths must be specified in the request body.
         When renaming to a different parent directory, the parent directory of the new path must already exist.
-        Access token must be provided as a query parameter.
+        Access token and refresh token must be provided as a query parameters.
       operationId: renamePath
       parameters:
         - name: client_id
@@ -445,7 +445,7 @@ paths:
       description: |
         Create a directory on the endpoint. Path is relative to the endpoint default directory.
         Path must be specified in the request body.
-        Access token must be provided as a query parameter.
+        Access token and refresh token must be provided as a query parameters.
       operationId: makeDir
       parameters:
         - name: client_id
@@ -521,7 +521,7 @@ paths:
         Create a task to transfer files from a source endpoint to a destination endpoint.
         File paths are relative to the endpoint default directories.
         Endpoints are activated as needed.
-        Access token must be provided as a query parameter.
+        Access token and refresh token must be provided as a query parameters.
       operationId: createTransferTask
       parameters:
         - name: client_id
@@ -579,7 +579,7 @@ paths:
       summary: Retrieve transfer task
       description: |
         Retrieve a transfer task given the task Id.
-        Access token must be provided as a query parameter.
+        Access token and refresh token must be provided as a query parameters.
       operationId: getTransferTask
       parameters:
         - name: client_id
@@ -985,16 +985,16 @@ components:
           description: Path relative to default directory of the endpoint
           pattern: ^(?!.*\.\.).*
           type: string
-          example: "/dirA/dirB/"
+          example: "/dirA/file_old.txt"
     ReqRename:
       required:
         - destination_path
       type: object
       properties:
-        source_path:
-          pattern: ^(?!.*\.\.).*
-          type: string
-          example: "/dirA/file_old.txt"
+#        source_path:
+#          pattern: ^(?!.*\.\.).*
+#          type: string
+#          example: "/dirA/file_old.txt"
         destination_path:
           pattern: ^(?!.*\.\.).*
           type: string
