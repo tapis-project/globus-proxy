@@ -1113,9 +1113,7 @@ components:
         message:
           type: string
         result:
-          type: object
-          items:
-            $ref: '#/components/schemas/RespFileListData'
+          $ref: '#/components/schemas/RespFileListData'
         version:
           type: string
         metadata:
