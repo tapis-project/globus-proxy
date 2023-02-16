@@ -382,14 +382,14 @@ paths:
           required: true
           schema:
             type: string
-          example: "0259148a-8ae0-44b7-80b5-a4060e92de3e"
+          example: "1784148a-8ae0-44b7-80b5-b5999e92de3a"
         - name: path
           in: path
           description: Path relative to default directory of the endpoint
           required: true
           schema:
             type: string
-          example: "/dirA/dirB/"
+            example: "/dirA/dirB/"
         - name: access_token
           in: query
           description: Globus transfer access token
@@ -978,15 +978,6 @@ components:
     # -------------------------------------------------------------------------
     # --- Request objects -----------------------------------------------------
     # -------------------------------------------------------------------------
-    ReqMakeDir:
-      required:
-        - path
-      type: object
-      properties:
-        path:
-          pattern: ^(?!.*\.\.).*
-          type: string
-          example: "/dirA/dirB"
     ReqRename:
       required:
         - destination_path
