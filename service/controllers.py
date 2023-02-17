@@ -49,7 +49,7 @@ class AuthURLResource(Resource):
                 result = {"url": authorize_url, "session_id": session_client.verifier}, 
                 msg = f'Please go to this URL and login: {authorize_url}'
               )
-
+ 
 class TokensResource(Resource):
     """
     exchange client_id, session_id, & auth code for access and refresh tokens
@@ -61,7 +61,7 @@ class TokensResource(Resource):
             client = globus_sdk.NativeAppAuthClient(client_id)
             session_client = client.oauth2_start_flow(verifier=session_id)
         except Exception as e:
-            logger.error(f'Encountered exception while initializing globus_sdk::\n\t{e}')
+            logger.error(f'Encountered exception while initializing globus_sdk::\n\t{e}\n\twith client_id: { client_id }')
             return utils.error(
                 msg= 'Unknown error occurred. Unable to authenticate client'
             )
