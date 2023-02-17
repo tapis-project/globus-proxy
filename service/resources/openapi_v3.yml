@@ -983,17 +983,13 @@ components:
           type: string
     ReqRename:
       required:
-        - destination_path
+        - destination
       type: object
       properties:
-#        source_path:
-#          pattern: ^(?!.*\.\.).*
-#          type: string
-#          example: "/dirA/file_old.txt"
-        destination_path:
+        destination:
           pattern: ^(?!.*\.\.).*
           type: string
-          example: "/dirA/file_new.txt"
+          example: "dirA/file_new.txt"
     ReqCreateTransfer:
       required:
         - source_endpoint
