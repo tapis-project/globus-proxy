@@ -444,7 +444,6 @@ paths:
       summary: Create a directory
       description: |
         Create a directory on the endpoint. Path is relative to the endpoint default directory.
-        Path must be specified in the request body.
         Access token and refresh token must be provided as a query parameters.
       operationId: makeDir
       parameters:
@@ -480,11 +479,11 @@ paths:
           required: true
           schema:
             type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReqMakeDir'
+#      requestBody:
+#        content:
+#          application/json:
+#            schema:
+#              $ref: '#/components/schemas/ReqMakeDir'
       responses:
         '200':
           description: Success
@@ -977,15 +976,11 @@ components:
     # --- Request objects -----------------------------------------------------
     # -------------------------------------------------------------------------
     ReqMakeDir:
-      required:
-        - path
       type: object
       properties:
-        path:
-          description: Path relative to default directory of the endpoint
-          pattern: ^(?!.*\.\.).*
+        not_used:
+          description: Not used but required? TODO/TBD
           type: string
-          example: "/dirA/file_old.txt"
     ReqRename:
       required:
         - destination_path
