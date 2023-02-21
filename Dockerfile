@@ -1,4 +1,4 @@
-FROM tapis/flaskbase
+FROM tapis/flaskbase:latest
 
 
 ADD requirements.txt /home/tapis/requirements.txt
