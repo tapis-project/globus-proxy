@@ -763,8 +763,8 @@ components:
         recursive:
           type: boolean
           description: "Must be true for a directory path and false for a file."
-    # --- TransferTask -------------------------------------------------------------
-    TransferTask:
+    # --- GlobusTransferTask -------------------------------------------------------------
+    GlobusTransferTask:
       type: object
       properties:
         bytes_transferred:
@@ -1124,7 +1124,7 @@ components:
         version:
           type: string
         result:
-          $ref: '#/components/schemas/TransferTask'
+          $ref: '#/components/schemas/GlobusTransferTask'
         metadata:
           type: object
     RespCancelTask:
