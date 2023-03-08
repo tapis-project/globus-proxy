@@ -748,8 +748,8 @@ components:
         size:
           type: integer
           description: size in bytes
-    # --- TransferItem -------------------------------------------------------------
-    TransferItem:
+    # --- GlobusTransferItem -------------------------------------------------------------
+    GlobusTransferItem:
       required:
         - source_path
         - destination_path
@@ -1005,7 +1005,7 @@ components:
           type: array
           minItems: 1
           items:
-            $ref: '#/components/schemas/TransferItem'
+            $ref: '#/components/schemas/GlobusTransferItem'
 
     # -------------------------------------------------------------------------
     # --- Response objects ----------------------------------------------------
