@@ -6,11 +6,11 @@ Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
 Breaking Changes:
 
-    Initial release.
+    None.
 
 New features:
 
-    Initial release.
+    Upgrade globus_sdk to 3.17
 
 Bug fixes:
 
