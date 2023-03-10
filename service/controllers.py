@@ -218,8 +218,12 @@ class OpsResource(Resource):
                 msg='Given tokens are not valid. Try again with active auth tokens'
             )
         except Exception as e:
-            pass
-            # TODO: handle more exceptions?
+            msg = f'Unidentified error attempting to instatiate Globus SDK with client id: {client_id}:\n\t{e}'
+            logger.error(msg)
+            return utils.error(
+                msg=msg
+            )
+            # TODO: find out what Steve's issue is when he's listing files with expired tokens?
 
         # perform ls op
         try:
