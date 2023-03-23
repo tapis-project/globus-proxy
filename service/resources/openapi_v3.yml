@@ -2,7 +2,7 @@ openapi: 3.0.2
 info:
   title: Tapis Globus Proxy API
   description: The Tapis Globus Proxy API proxies calls to Globus coming from a Tapis service.
-  version: '0.0.1'
+  version: '1.3.0'
   termsOfService: "https://tapis-project.org"
   contact:
     name: "Tapis Globux Proxy API - CICSupport"
