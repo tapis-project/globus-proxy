@@ -70,7 +70,8 @@ def ls_endpoint(tc, ep_id, path="~"):
     ls = tc.operation_ls(ep_id, path=path)
     return ls
     
-def transfer(tc, source_endpoint_id, dest_endpoint_id, files='', dirs='', label='TapisV3', sync_level="size",verify_checksum=False):  
+
+def transfer(tc, source_endpoint_id, dest_endpoint_id, files='', dirs='', label='Tapisv3', sync_level="size",verify_checksum=False):  
     '''
     # verify_checksum for now. if there's a bottleneck, reconsider
     '''

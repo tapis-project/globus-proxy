@@ -197,7 +197,7 @@ class OpsResource(Resource):
     # ls
     def get(self, client_id, endpoint_id, path):
         # parse args & perform precheck
-        logger.debug(f'in ls with path:: {path}')
+        logger.debug(f'beginning ls with client:: {client_id} path:: {path}')
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
@@ -205,25 +205,26 @@ class OpsResource(Resource):
         offset = request.args.get('offset')
         filter = request.args.get('filter')
         if not access_token or not refresh_token:
-            logger.error('error parsing args. Check syntax and try again')
+            logger.error(f'error parsing tokens from args for client {client_id}')
             return utils.error(
-                msg='Exception while parsing request parameters. Please check your request syntax and try again'
-                )
+                result=401,
+                msg='Could not parse token from request parameters. Please provide valid token.'
+            )
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
-            logger.debug(f'have tc:: {transfer_client}')
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             return utils.error(
-                msg='Given tokens are not valid. Try again with active auth tokens'
+                result=401,
+                msg='Access token invalid. Please provide valid token.'
             )
         except Exception as e:
             msg = f'Unidentified error attempting to instatiate Globus SDK with client id: {client_id}:\n\t{e}'
             logger.error(msg)
             return utils.error(
-                msg=msg
+                result=500,
+                msg="Server error."
             )
-            # TODO: find out what Steve's issue is when he's listing files with expired tokens?
 
         # perform ls op
         try:
@@ -233,9 +234,55 @@ class OpsResource(Resource):
             if offset:
                 query_dict['offset'] = offset
             logger.debug(f'have query dict:: {query_dict}')
-            # call operation_ls to make the directory
+            # call operation_ls to list everything in the directory
             #TODO: Fix query params not doing anything
-            logger.debug(f'about to ls, have tc:: {transfer_client}')
+            split_path = path.rsplit("/", 1)
+            
+            if len(split_path) == 1:
+                    if split_path[0] == '.' or split_path[0] == '~':
+                        parent_dir = path # home directory, no need to change anything
+                    else:
+                        logger.error("{split_path} length is 1 but it's not the home directory.") 
+                        return utils.error(
+                        result=500,
+                        msg="Server error"
+                    )
+            elif len(split_path) > 1:
+                parent_dir = path.rsplit("/", 1)[0]
+                child_name = path.rsplit("/", 1)[1]
+                # need to find out if requested object if a file or directory
+                logger.debug(f'checking parent dir: {parent_dir}')
+                try:
+                    result = transfer_client.operation_ls(
+                        endpoint_id=(endpoint_id),
+                        path=parent_dir
+                    )
+                    logger.debug("looping through gathered items")
+                    for item in result.data["DATA"]:
+                        name = item["name"]
+                        logger.debug(f"checking item with name {name}")
+                        if item["name"] != child_name: continue
+                        if item["type"] == "file":
+                            return utils.ok(
+                                result = item,
+                                msg="Successfully retrieved file"
+                            )
+                        elif item["type"] == "dir": break
+
+
+                except Exception as e:
+                    logger.error(f"encountered exception checking parent directory of path: {path} with client id {client_id}:: {e}")               
+                    return utils.error(
+                        result=500,
+                        msg="Server error"
+                    )
+            else:
+                # something went wrong. This should never be 0.
+                logger.error(f'length of split path -- {path} -- was 0. This should never happen.')
+                return utils.error(
+                    result=404,
+                    msg="Could not resolve path. Please check your request syntax and try again"
+                )
             result = transfer_client.operation_ls(
                 endpoint_id=(endpoint_id),
                 path=path,
@@ -253,6 +300,7 @@ class OpsResource(Resource):
                 )
             elif e.code == "ClientError.NotFound":
                 return utils.error(
+                    result=404,
                     msg='Path does not exist on given endpoint'
                 )
             elif e.code == "ExternalError.DirListingFailed.GCDisconnected":
@@ -265,8 +313,7 @@ class OpsResource(Resource):
                 msg='Unknown error while performing ls operation'
             )
         else:
-            # TODO: send access token back, even if it's the same one
-            # if the tokens get refreshed live, we could have a race condition 
+            # TODO: if the tokens get refreshed live, we could have a race condition 
             # figure out a way to test if refreshed access tokens will cause a call to fail
                 # especially for concurrent ops
                 
@@ -275,7 +322,7 @@ class OpsResource(Resource):
                 result=result.data,
                 metadata={'access_token': access_token}
             )
-            
+        logger.error(f"Unknown error preforming list operation for client {client_id}")
         return utils.error(
             msg='Unknown error performing list operation'
         )
@@ -476,14 +523,14 @@ class ModifyTransferResource(Resource):
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
-            logger.debug(f'error while getting transfer client for client id {client_id}: {e}')
+            logger.error(f'error while getting transfer client for client id {client_id}: {e}')
             return utils.error(
                 msg='Error while authenticating globus client'
             )
         try:
             result = transfer_client.get_task(task_id)
         except Exception as e:
-            logger.debug(f'error while getting transfer task with id {task_id}: {e}')
+            logger.error(f'error while getting transfer task with id {task_id}: {e}')
             return utils.error(
                 msg='Error retrieving transfer task'
             )
@@ -499,14 +546,14 @@ class ModifyTransferResource(Resource):
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
-            logger.debug(f'error while getting transfer client for client id {client_id}: {e}')
+            logger.error(f'error while getting transfer client for client id {client_id}: {e}')
             return utils.error(
                 msg='Error while authenticating globus client'
             )
         try:
             result = transfer_client.cancel_task(task_id)
         except Exception as e:
-            logger.debug(f'error while canceling transfer task with id {task_id}: {e}')
+            logger.error(f'error while canceling transfer task with id {task_id}: {e}')
             return utils.error(
                 msg='Error retrieving transfer task'
             )
