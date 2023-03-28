@@ -823,7 +823,7 @@ components:
           type: string
           example: "ddb59aef-6d04-11e5-ba46-22000b92c6ec"
         status:
-          $ref: '#/components/schemas/GlobusTaskStatusEnum'
+          type: string
         symlinks:
           type: integer
         sync_level:
@@ -832,7 +832,7 @@ components:
           type: string
           example: "36ccfc18-8493-11ec-9008-3132d806a822"
         type:
-          $ref: '#/components/schemas/GlobusTaskTypeEnum'
+          type: string
         verify_checksum:
           type: boolean
     # TRANSFER TASK
@@ -1176,6 +1176,8 @@ components:
       enum:
         - TRANSFER
         - DELETE
+        - NULL
+        - UNKNOWN
     GlobusTaskStatusEnum:
       type: string
       enum:
@@ -1183,6 +1185,8 @@ components:
         - INACTIVE
         - SUCCEEDED
         - FAILED
+        - NULL
+        - UNKNOWN
     GlobusTaskCancelEnum:
       type: string
       enum:
