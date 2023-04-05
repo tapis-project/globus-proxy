@@ -29,7 +29,7 @@ class PathNotFoundError(BaseTapisError):
 
 class GlobusError(BaseTapisError):
     """General error with the Globus SDK"""
-    def __init__(self, msg=None, code=500):
+    def __init__(self, msg=None, code=407):
         super().__init__(msg, code)
     pass
 

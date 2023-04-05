@@ -374,7 +374,6 @@ class OpsResource(Resource):
 
 
 class TransferResource(Resource):
-    # TODO make sure that the tokens are valid
     def post(self, client_id):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
@@ -393,10 +392,8 @@ class TransferResource(Resource):
         try:
             transfer_client = precheck(client_id, [src, dest], access_token, refresh_token)
             logger.debug(f'have tc:: {transfer_client}')
-        except PythonAuthenticationError:
-            raise AuthenticationError(msg='Access token invalid. Please provide valid token.' )
         except Exception as e:
-            logger.debug(f'failed to authenticate transfer client :: {e}')
+            logger.error(f'failed to authenticate transfer client :: {e}')
             raise InternalServerError(msg='Failed to authenticate transfer client')
             # TODO handle errors?
 
@@ -408,9 +405,7 @@ class TransferResource(Resource):
                 logger.debug('dest is not active')   
                 autoactivate_endpoint(transfer_client, dest)
         except PythonAuthenticationError as e:
-            return utils.error(
-                msg='Unable to activate one or more endpoints'
-            )
+            raise GlobusError(msg='Unable to activate one or more endpoints')
         result = (transfer(transfer_client, src, dest, items))
         if "File Transfer Failed" in result:
             logger.error(f'File transfer failed due to {result}')
@@ -431,7 +426,8 @@ class ModifyTransferResource(Resource):
         refresh_token = request.args.get('refresh_token')
 
         try:
-            transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+            # transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+            transfer_client = precheck(client_id, None, access_token, refresh_token)
         except Exception as e:
             logger.error(f'error while getting transfer client for client id {client_id}: {e}')
             raise InternalServerError(msg='Error while authenticating globus client')
@@ -452,7 +448,8 @@ class ModifyTransferResource(Resource):
         refresh_token = request.args.get('refresh_token')
 
         try:
-            transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+            # transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+            transfer_client = precheck(client_id, None, access_token, refresh_token)
         except Exception as e:
             logger.error(f'error while getting transfer client for client id {client_id}: {e}')
             raise AuthenticationError(msg='Error while authenticating globus client')

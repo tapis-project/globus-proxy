@@ -10,9 +10,7 @@ logger = get_logger(__name__)
 
 def get_transfer_client(client_id, refresh_token, access_token):
     client = globus_sdk.NativeAppAuthClient(client_id)
-    # client = globus_sdk.AuthClient(client_id=client_id)
-    # check_token(client_id, refresh_token)
-    # check_token(client_id, access_token)
+    # check_token(client_id, refresh_token, access_token)
     tomorrow = datetime.today() + timedelta(days=1)
     expires_at = tomorrow.timestamp()
     authorizer = globus_sdk.RefreshTokenAuthorizer(
@@ -46,7 +44,7 @@ def check_tokens(client_id, refresh_token, access_token):
     try:
         response= client.oauth2_validate_token(access_token)
     except Exception as e:
-        logger.debug(f'exception while validating access token:: {e}')
+        logger.error(f'exception while validating access token:: {e}')
         access_token = get_valid_token(client_id, refresh_token)
 
     return access_token, refresh_token
@@ -163,6 +161,10 @@ def precheck(client_id, endpoints, access_token, refresh_token):
             logger.error(f'unable to get transfer client or client {client_id}: {e}')
             raise GlobusError(msg='Exception while generating authorization. Please check your request syntax and try again')
         logger.debug(f'in precheck, have tc {transfer_client}')
+
+        # allow operations that don't use endpoints to still use precheck
+        if endpoint is None:
+            return transfer_client
         
         # activate endpoint
         logger.debug(f'about to check eps:: {endpoints}')
@@ -181,19 +183,19 @@ def precheck(client_id, endpoints, access_token, refresh_token):
 
 def autoactivate_endpoint(transfer_client, endpoint_id):
     try:
+        logger.info(f'Trying to autoactivate endpoint {endpoint_id}')
         result = transfer_client.endpoint_autoactivate(endpoint_id)
-        logger.debug(f'in autoactivate, have res:: {result}')
+        logger.debug(f'have res:: {result}')
         if result['code'] == "AutoActivationFailed":
-            raise PythonAuthenticationError
+            logger.error(f'endpoint activation failed. Endpoint {endpoint_id} must be manuallty activated')
+            raise GlobusError(msg=f'endpoint activation failed. Activate endpoint {endpoint_id} by going to https://app.globus.org/file-manager?origin_id={endpoint_id}')
+            # TODO: spawn thread that waits for activation?
     except PythonAuthenticationError as e:
-        logger.error(f'endpoint activation failed. Endpoint {endpoint_id} must be manuallty activated')
-        raise PythonAuthenticationError(msg=f'Endpoint {endpoint_id} must be manually activated')
+        logger.error(f'Endpoint activation failed due to invalid token. Endpoint {endpoint_id} must be manuallty activated')
+        raise PythonAuthenticationError()
     except Exception as e:
-        logger.debug(f'Unknown exception activating endpoint with id {endpoint_id}')
-        pass
-        # TODO: handle excpetions. 
-
-    # return transfer client
-    return transfer_client
+        logger.error(f'Unknown exception activating endpoint with id {endpoint_id} :: {e}')
+        raise InternalServerError()
+    
 
 
