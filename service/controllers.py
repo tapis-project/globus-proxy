@@ -18,7 +18,7 @@ from globus_sdk import TransferAPIError
 from utils import check_tokens, get_transfer_client, precheck, transfer, is_endpoint_activated, autoactivate_endpoint
 from errors import InternalServerError
 
-# from multiprocessing import AuthenticationError
+from multiprocessing import AuthenticationError as PythonAuthenticationError
 
 logger = get_logger(__name__)
 app = Flask(__name__)
@@ -158,7 +158,7 @@ class OpsResource(Resource):
     #     # check token validity
     #     try:
     #         access_token, refresh_token = check_tokens(client_id, refresh_token, access_token)
-    #     except AuthenticationError:
+    #     except PythonAuthenticationError:
     #         # refresh token is invalid, must redo auth process
     #         logger.error(f'exception while validating tokens:: {e}')
     #         return utils.error(
@@ -180,7 +180,7 @@ class OpsResource(Resource):
     #         result = transfer_client.endpoint_autoactivate(endpoint_id)
     #         if result['code'] == "AutoActivationFailed":
     #             raise AuthenticationError
-    #     except AuthenticationError as e:
+    #     except PythonAuthenticationError as e:
     #         logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
     #         return utils.error(
     #             msg=f'Endpoint {endpoint_id} must be manually activated'
@@ -210,7 +210,7 @@ class OpsResource(Resource):
 
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
-        except AuthenticationError:
+        except PythonAuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             msg='Access token invalid. Please provide valid token.'
             raise AuthenticationError(msg=msg, code=401)
@@ -313,7 +313,7 @@ class OpsResource(Resource):
 
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
-        except AuthenticationError:
+        except PythonAuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             raise AuthenticationError(msg='Given tokens are not valid. Try again with active auth tokens')
         except Exception as e:
@@ -359,7 +359,7 @@ class OpsResource(Resource):
 
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
-        except AuthenticationError:
+        except PythonAuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             raise AuthenticationError(msg='Given tokens are not valid. Try again with active auth tokens')
         except Exception as e:
@@ -399,7 +399,7 @@ class OpsResource(Resource):
 
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
-        except AuthenticationError:
+        except PythonAuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             raise AuthenticationError(msg='Given tokens are not valid. Try again with active auth tokens')
         except Exception as e:
@@ -436,7 +436,7 @@ class TransferResource(Resource):
         try:
             transfer_client = precheck(client_id, [src, dest], access_token, refresh_token)
             logger.debug(f'have tc:: {transfer_client}')
-        except AuthenticationError:
+        except PythonAuthenticationError:
             raise AuthenticationError(msg='Access token invalid. Please provide valid token.' )
         except Exception as e:
             logger.debug(f'failed to authenticate transfer client :: {e}')
@@ -450,7 +450,7 @@ class TransferResource(Resource):
             if not is_endpoint_activated(transfer_client, dest): 
                 logger.debug('dest is not active')   
                 autoactivate_endpoint(transfer_client, dest)
-        except AuthenticationError as e:
+        except PythonAuthenticationError as e:
             return utils.error(
                 msg='Unable to activate one or more endpoints'
             )
