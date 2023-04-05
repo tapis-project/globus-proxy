@@ -146,6 +146,15 @@ class CheckTokensResource(Resource):
             
 
 class OpsResource(Resource):
+
+    def handle_transfer_error(code):
+        if code == "AuthenticationFailed":
+            raise AuthenticationError(msg='Could not authenticate transfer client', code=401)
+        elif code == "ClientError.NotFound":
+            raise PathNotFoundError(msg='Path does not exist on given endpoint', code=404)
+        elif code == "ExternalError.DirListingFailed.GCDisconnected":
+            raise GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
+
     # ls
     def get(self, client_id, endpoint_id, path):
         # parse args & perform precheck
@@ -228,14 +237,8 @@ class OpsResource(Resource):
             # logger.debug(f'got result::{result}')
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
-            # api errors come through as specific codes, each one can be handled separately 
-            # TODO: change this to be a handle function so that I dont have to repeat all this code
-            if e.code == "AuthenticationFailed":
-                raise AuthenticationError(msg='Could not authenticate transfer client for ls operation', code=401)
-            elif e.code == "ClientError.NotFound":
-                raise PathNotFoundError(msg='Path does not exist on given endpoint', code=404)
-            elif e.code == "ExternalError.DirListingFailed.GCDisconnected":
-                raise GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
+            # api errors come through as specific codes, each one can be handled separately
+            handle_transfer_error(e.code)
         except Exception as e:
             logger.error(f'exception while doing ls operation for client {client_id}:: {e}')
             raise InternalServerError()
@@ -270,10 +273,13 @@ class OpsResource(Resource):
         except PythonAuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
             raise AuthenticationError(msg='Given tokens are not valid. Try again with active auth tokens')
+        except TransferAPIError as e:
+            logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
+            # api errors come through as specific codes, each one can be handled separately
+            handle_transfer_error(e.code)
         except Exception as e:
             logger.error(f'exception performing mkdir for client {client_id} at path {path}:: {e}')
             raise InternalServerError(msg=f"Unkown error performing mkdir at path {path}. Please check request syntax and try again.")
-            # TODO: handle more exceptions?
 
         # perform mkdir op
         try:
@@ -282,10 +288,10 @@ class OpsResource(Resource):
                 path=path
             )
         except TransferAPIError as e:
-            logger.error(f'transfer api error for client {client_id}: {e}')
-            if e.code == "AuthenticationFailed":
-                raise AuthenticationError(msg='Could not authenticate transfer client for mkdir operation')
-            # TODO: handle the path already existing
+            logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
+            # api errors come through as specific codes, each one can be handled separately
+            handle_transfer_error(e.code)
+            # TODO: handle intermediate folder creation? e.g. path/to/thing instead of path/
         except Exception as e:
             logger.error(f'exception while performing mkdir operation for client {client_id} at path {path}:: {e}')
             raise InternalServerError(msg=f'Unknown error while performing mkdir operation at path {path}')
@@ -320,6 +326,7 @@ class OpsResource(Resource):
             logger.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
             raise InternalServerError()
             # TODO: handle more exceptions?
+            
 
         # perform delete
         try:
@@ -331,7 +338,12 @@ class OpsResource(Resource):
             delete_task.add_item(path)
             logger.debug(f'have delete task:: {delete_task}')
             result = transfer_client.submit_delete(delete_task)
+        except TransferAPIError as e:
+            logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
+            # api errors come through as specific codes, each one can be handled separately
+            handle_transfer_error(e.code)
         except Exception as e:
+        # TODO: make sure path exists on endpoint
             logger.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
             raise InternalServerError()
         logger.info(f'Successful delete for client {client_id} at path {path}')
@@ -363,6 +375,10 @@ class OpsResource(Resource):
         # perform rename
         try:
             result = transfer_client.operation_rename(endpoint_id, oldpath=path, newpath=dest)
+        except TransferAPIError as e:
+            logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
+            # api errors come through as specific codes, each one can be handled separately
+            handle_transfer_error(e.code)
         except Exception as e:
             logger.error(f'exception in rename with client {client_id}, endpoint {endpoint_id} and path {path}:: {e}')
             raise InternalServerError(msg='Unknown error while performing rename')
@@ -387,7 +403,6 @@ class TransferResource(Resource):
             logger.error('error parsing args')
             raise AuthenticationError(msg='Exception while parsing request parameters. Please check your request syntax and try again')
 
-        # TODO: add the error handling here instead?
         transfer_client = None
         try:
             transfer_client = precheck(client_id, [src, dest], access_token, refresh_token)
@@ -395,17 +410,7 @@ class TransferResource(Resource):
         except Exception as e:
             logger.error(f'failed to authenticate transfer client :: {e}')
             raise InternalServerError(msg='Failed to authenticate transfer client')
-            # TODO handle errors?
 
-        try:
-            if not is_endpoint_activated(transfer_client, src):
-                logger.debug('src is not active')
-                autoactivate_endpoint(transfer_client, src)
-            if not is_endpoint_activated(transfer_client, dest): 
-                logger.debug('dest is not active')   
-                autoactivate_endpoint(transfer_client, dest)
-        except PythonAuthenticationError as e:
-            raise GlobusError(msg='Unable to activate one or more endpoints')
         result = (transfer(transfer_client, src, dest, items))
         if "File Transfer Failed" in result:
             logger.error(f'File transfer failed due to {result}')
