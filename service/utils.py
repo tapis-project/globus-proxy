@@ -1,9 +1,10 @@
-from multiprocessing import AuthenticationError
+from multiprocessing import PythonAuthenticationError as PythonPythonAuthenticationError
 from datetime import datetime, timedelta
 import globus_sdk
 
 from tapisservice.logs import get_logger
 from tapisservice.tapisflask import utils
+from errors import *
 
 logger = get_logger(__name__)
 
@@ -26,7 +27,7 @@ def get_transfer_client(client_id, refresh_token, access_token):
 def check_tokens(client_id, refresh_token, access_token):
     '''
     Small utility function to check the validity of a globus auth token pair. 
-    If refresh_token is invalid, raises AuthenticationError - you must then go through the auth process again to get a new token pair
+    If refresh_token is invalid, raises PythonAuthenticationError - you must then go through the auth process again to get a new token pair
     If access_token is expired, gets a new one
 
     returns valid token pair
@@ -37,11 +38,11 @@ def check_tokens(client_id, refresh_token, access_token):
         response = client.oauth2_validate_token(refresh_token)
     except Exception as e:
         logger.error(f'exception while validating refresh token:: {e}')
-        raise AuthenticationError
+        raise PythonAuthenticationError
     else:
         active = response['active']
         if not active:
-            raise AuthenticationError
+            raise PythonAuthenticationError
     try:
         response= client.oauth2_validate_token(access_token)
     except Exception as e:
@@ -148,13 +149,10 @@ def precheck(client_id, endpoints, access_token, refresh_token):
         # check token validity
         try:
             access_token, refresh_token = check_tokens(client_id, refresh_token, access_token)
-        except AuthenticationError:
+        except PythonAuthenticationError:
             # refresh token is invalid, must redo auth process
             logger.error(f'exception while validating tokens:: {e}')
-            # raise AuthenticationError
-            return utils.error(
-                msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
-            )
+            raise PythonAuthenticationError(msg='Error while validating tokens. Please redo the Oauth2 process for this client_id')
             # TODO: handle more exceptions, figure out how to make them nice for the calling function
 
         # get transfer client
@@ -163,9 +161,7 @@ def precheck(client_id, endpoints, access_token, refresh_token):
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
             logger.error(f'unable to get transfer client or client {client_id}: {e}')
-            return utils.error(
-                msg='Exception while generating authorization. Please check your request syntax and try again'
-            )
+            raise GlobusError(msg='Exception while generating authorization. Please check your request syntax and try again')
         logger.debug(f'in precheck, have tc {transfer_client}')
         
         # activate endpoint
@@ -188,13 +184,10 @@ def autoactivate_endpoint(transfer_client, endpoint_id):
         result = transfer_client.endpoint_autoactivate(endpoint_id)
         logger.debug(f'in autoactivate, have res:: {result}')
         if result['code'] == "AutoActivationFailed":
-            raise AuthenticationError
-    except AuthenticationError as e:
+            raise PythonAuthenticationError
+    except PythonAuthenticationError as e:
         logger.error(f'endpoint activation failed. Endpoint {endpoint_id} must be manuallty activated')
-        # return utils.error(
-        #     msg=f'Endpoint {endpoint_id} must be manually activated'
-        # )
-        raise AuthenticationError
+        raise PythonAuthenticationError(msg=f'Endpoint {endpoint_id} must be manually activated')
     except Exception as e:
         logger.debug(f'Unknown exception activating endpoint with id {endpoint_id}')
         pass

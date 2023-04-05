@@ -146,52 +146,6 @@ class CheckTokensResource(Resource):
             
 
 class OpsResource(Resource):
-    # TODO: Switch to using utils.precheck instead for ops things
-    # def ops_precheck(self, client_id, endpoint_id, access_token, refresh_token):
-    #     '''
-    #     Performs several precheck opertations such as
-    #         making sure the tokens are valid and exchanging an expired access token for an active one
-    #         activating a transfer client
-        
-    #     returns authenticated transfer client
-    #     '''
-    #     # check token validity
-    #     try:
-    #         access_token, refresh_token = check_tokens(client_id, refresh_token, access_token)
-    #     except PythonAuthenticationError:
-    #         # refresh token is invalid, must redo auth process
-    #         logger.error(f'exception while validating tokens:: {e}')
-    #         return utils.error(
-    #             msg='Error while validating tokens. Please redo the Oauth2 process for this client_id'
-    #         )
-    #         # TODO: handle more exceptions, figure out how to make them nice for the calling function
-
-    #     # get transfer client
-    #     try:
-    #         transfer_client = get_transfer_client(client_id, refresh_token, access_token)
-    #     except Exception as e:
-    #         logger.error(f'unable to get transfer client or client {client_id}: {e}')
-    #         return utils.error(
-    #             msg='Exception while generating authorization. Please check your request syntax and try again'
-    #         )
-        
-    #     # activate endpoint
-    #     try:
-    #         result = transfer_client.endpoint_autoactivate(endpoint_id)
-    #         if result['code'] == "AutoActivationFailed":
-    #             raise AuthenticationError
-    #     except PythonAuthenticationError as e:
-    #         logger.error(f'endpoint activation failed. Endpoint must be manuallty activated')
-    #         return utils.error(
-    #             msg=f'Endpoint {endpoint_id} must be manually activated'
-    #         )
-    #     except Exception as e:
-    #         pass
-    #         # TODO: handle excpetions. 
-        
-    #     # return trans client
-    #     return transfer_client
-
     # ls
     def get(self, client_id, endpoint_id, path):
         # parse args & perform precheck
@@ -420,7 +374,6 @@ class OpsResource(Resource):
 
 
 class TransferResource(Resource):
-    # TODO: make sure that the eps are activated before starting anything
     # TODO make sure that the tokens are valid
     def post(self, client_id):
         access_token = request.args.get('access_token')
@@ -430,6 +383,10 @@ class TransferResource(Resource):
         items = request.json.get('transfer_items')
 
         logger.debug(f'have setup args \n{access_token}\n{refresh_token}\n{src}\n{dest}\n{items}')
+
+        if not access_token or not refresh_token:
+            logger.error('error parsing args')
+            raise AuthenticationError(msg='Exception while parsing request parameters. Please check your request syntax and try again')
 
         # TODO: add the error handling here instead?
         transfer_client = None
