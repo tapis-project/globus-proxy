@@ -1,4 +1,4 @@
-from multiprocessing import PythonAuthenticationError as PythonPythonAuthenticationError
+from multiprocessing import AuthenticationError as PythonPythonAuthenticationError
 from datetime import datetime, timedelta
 import globus_sdk
 
