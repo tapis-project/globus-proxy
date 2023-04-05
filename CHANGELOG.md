@@ -1,6 +1,4 @@
-1.2.0 - 2022-05-31
-
-Initial production release of the Tapis Globus-Proxy API
+1.3.0 - 2023-04-03
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
@@ -10,8 +8,9 @@ Breaking Changes:
 
 New features:
 
-    Upgrade globus_sdk to 3.17
+    - Upgrade globus_sdk to 3.17
+    - More meaningful trace logs
 
 Bug fixes:
 
-    None.
+    - fixed errors returning 200 codes

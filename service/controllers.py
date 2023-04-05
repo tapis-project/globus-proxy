@@ -10,13 +10,15 @@ from flask_restful import Resource
 from tapisservice.tapisflask import utils
 from tapisservice.tapisflask.resources import ReadyResource
 from tapisservice.logs import get_logger
+from tapisservice.errors import AuthenticationError
 
 import globus_sdk
 from globus_sdk import TransferAPIError
 
 from utils import check_tokens, get_transfer_client, precheck, transfer, is_endpoint_activated, autoactivate_endpoint
+from errors import InternalServerError
 
-from multiprocessing import AuthenticationError
+# from multiprocessing import AuthenticationError
 
 logger = get_logger(__name__)
 app = Flask(__name__)
@@ -37,18 +39,16 @@ class AuthURLResource(Resource):
         try:
             client = globus_sdk.NativeAppAuthClient(client_id)
         except Exception as e:
-            logger.debug(f'Encountered exception while initializing globus_dsk::\n\t{e}')
-            return utils.error(
-                msg = 'Unknown error occurred'
-            )
+            msg = f'Encountered exception while initializing globus_sdk for client {client_id}\n\t{e}'
+            logger.error(msg)
+            raise InternalServerError(msg=msg)
         session_client = client.oauth2_start_flow(refresh_tokens=True)
         authorize_url = client.oauth2_get_authorize_url()
-
+        logger.debug(f"successfully got auth url for client {client_id}")
         return utils.ok(
-                # result = {"url": authorize_url, "uuid": session_id}, 
                 result = {"url": authorize_url, "session_id": session_client.verifier}, 
-                msg = f'Please go to this URL and login: {authorize_url}'
-              )
+                msg = f'Please go to the URL and login'
+            )
  
 class TokensResource(Resource):
     """
@@ -61,28 +61,26 @@ class TokensResource(Resource):
             client = globus_sdk.NativeAppAuthClient(client_id)
             session_client = client.oauth2_start_flow(verifier=session_id)
         except Exception as e:
-            logger.error(f'Encountered exception while initializing globus_sdk::\n\t{e}\n\twith client_id: { client_id }')
-            return utils.error(
-                msg= 'Unknown error occurred. Unable to authenticate client'
-            )
+            msg = f'Encountered exception while initializing globus_sdk with client id:: {client_id}\n\t{e}\n\t'
+            logger.error(msg)
+            raise InternalServerError(msg=msg)
 
 
         # get access / refresh tokens
         try:
             token_response = client.oauth2_exchange_code_for_tokens(auth_code).by_resource_server
         except globus_sdk.services.auth.errors.AuthAPIError:
-            return utils.error(
-                msg = 'Invalid auth code given for client'
-            )
+            msg = f'Invalid auth code given for client {client_id}'
+            logger.error(msg)
+            raise AuthenticationError(msg=msg, code=500)
         else:
             try:
                 access_token = token_response['transfer.api.globus.org']['access_token']
                 refresh_token = token_response['transfer.api.globus.org']['refresh_token']
             except KeyError as e:
-                logger.error(f'Could not parse tokens from response:: {e}')
-                return utils.error(
-                    msg='Internal server error'
-                )
+                msg = f'Could not parse tokens from response:: {e}'
+                logger.error(msg)
+                raise InternalServerError(msg=msg)
         
         return utils.ok(
                 result = {"access_token": access_token, "refresh_token": refresh_token}, 
@@ -197,34 +195,29 @@ class OpsResource(Resource):
     # ls
     def get(self, client_id, endpoint_id, path):
         # parse args & perform precheck
-        logger.debug(f'beginning ls with client:: {client_id} path:: {path}')
+        logger.debug(f'beginning ls with client:: {client_id} & path:: {path}')
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
         limit = request.args.get('limit')
         offset = request.args.get('offset')
         filter = request.args.get('filter')
+
         if not access_token or not refresh_token:
+            msg='Could not parse token from request parameters. Please provide valid token.'
             logger.error(f'error parsing tokens from args for client {client_id}')
-            return utils.error(
-                result=401,
-                msg='Could not parse token from request parameters. Please provide valid token.'
-            )
+            raise AuthenticationError(msg=msg, code=401)
+
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
-            return utils.error(
-                result=401,
-                msg='Access token invalid. Please provide valid token.'
-            )
-        except Exception as e:
-            msg = f'Unidentified error attempting to instatiate Globus SDK with client id: {client_id}:\n\t{e}'
-            logger.error(msg)
-            return utils.error(
-                result=500,
-                msg="Server error."
-            )
+            msg='Access token invalid. Please provide valid token.'
+            raise AuthenticationError(msg=msg, code=401)
+        except Exception:
+            logger.error(f'Unidentified error attempting to instatiate Globus SDK with client id: {client_id}')
+            logger.error(traceback.print_exc())
+            raise InternalServerError(msg="Internal server error")
 
         # perform ls op
         try:
@@ -235,18 +228,15 @@ class OpsResource(Resource):
                 query_dict['offset'] = offset
             logger.debug(f'have query dict:: {query_dict}')
             # call operation_ls to list everything in the directory
-            #TODO: Fix query params not doing anything
+            
             split_path = path.rsplit("/", 1)
             
             if len(split_path) == 1:
                     if split_path[0] == '.' or split_path[0] == '~':
                         parent_dir = path # home directory, no need to change anything
                     else:
-                        logger.error("{split_path} length is 1 but it's not the home directory.") 
-                        return utils.error(
-                        result=500,
-                        msg="Server error"
-                    )
+                        logger.error(f"{split_path} length is 1 but it's not the home directory.") 
+                        raise InternalServerError()
             elif len(split_path) > 1:
                 parent_dir = path.rsplit("/", 1)[0]
                 child_name = path.rsplit("/", 1)[1]
@@ -268,64 +258,46 @@ class OpsResource(Resource):
                                 msg="Successfully retrieved file"
                             )
                         elif item["type"] == "dir": break
-
-
                 except Exception as e:
                     logger.error(f"encountered exception checking parent directory of path: {path} with client id {client_id}:: {e}")               
-                    return utils.error(
-                        result=500,
-                        msg="Server error"
-                    )
+                    raise InternalServerError()
             else:
                 # something went wrong. This should never be 0.
                 logger.error(f'length of split path -- {path} -- was 0. This should never happen.')
-                return utils.error(
-                    result=404,
-                    msg="Could not resolve path. Please check your request syntax and try again"
-                )
+                raise PathNotFoundError(code=404)
             result = transfer_client.operation_ls(
                 endpoint_id=(endpoint_id),
                 path=path,
                 filter=filter,
                 query_params=query_dict if query_dict != {} else None
             )
-            logger.debug(f'got result::{result}')
+            # logger.debug(f'got result::{result}')
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately 
             # TODO: change this to be a handle function so that I dont have to repeat all this code
             if e.code == "AuthenticationFailed":
-                return utils.error(
-                    msg='Could not authenticate transfer client for ls operation'
-                )
+                raise AuthenticationError(msg='Could not authenticate transfer client for ls operation', code=401)
             elif e.code == "ClientError.NotFound":
-                return utils.error(
-                    result=404,
-                    msg='Path does not exist on given endpoint'
-                )
+                raise PathNotFoundError(msg='Path does not exist on given endpoint', code=404)
             elif e.code == "ExternalError.DirListingFailed.GCDisconnected":
-                return utils.error(
-                    msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually'
-                )
+                raise GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
         except Exception as e:
             logger.error(f'exception while doing ls operation for client {client_id}:: {e}')
-            return utils.error(
-                msg='Unknown error while performing ls operation'
-            )
+            raise InternalServerError()
         else:
             # TODO: if the tokens get refreshed live, we could have a race condition 
             # figure out a way to test if refreshed access tokens will cause a call to fail
                 # especially for concurrent ops
-                
+            
+            logger.info(f'Successfully listed files on path:: {path} for client {client_id}')
             return utils.ok(
                 msg='Successfully listed files',
                 result=result.data,
                 metadata={'access_token': access_token}
             )
         logger.error(f"Unknown error preforming list operation for client {client_id}")
-        return utils.error(
-            msg='Unknown error performing list operation'
-        )
+        raise InternalServerError()
 
     # mkdir
     def post(self, client_id, endpoint_id, path):
@@ -334,21 +306,19 @@ class OpsResource(Resource):
         transfer_client = None
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
+
         if not access_token or not refresh_token:
-            logger.error('error parsing args')
-            return utils.error(
-                msg='Exception while parsing request parameters. Please check your request syntax and try again'
-                )
+            logger.error(f'error parsing args for client {client_id}')
+            raise AuthenticationError(msg='Exception while parsing request parameters. Please check your request syntax and try again')
 
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
-            return utils.error(
-                msg='Given tokens are not valid. Try again with active auth tokens'
-            )
+            raise AuthenticationError(msg='Given tokens are not valid. Try again with active auth tokens')
         except Exception as e:
-            return utils.error(f'exception while performink mkdir operation for client {client_id} at path {path}:: {e}')
+            logger.error(f'exception performing mkdir for client {client_id} at path {path}:: {e}')
+            raise InternalServerError(msg=f"Unkown error performing mkdir at path {path}. Please check request syntax and try again.")
             # TODO: handle more exceptions?
 
         # perform mkdir op
@@ -360,24 +330,19 @@ class OpsResource(Resource):
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}')
             if e.code == "AuthenticationFailed":
-                return utils.error(
-                    msg='Could not authenticate transfer client for mkdir operation'
-                )
+                raise AuthenticationError(msg='Could not authenticate transfer client for mkdir operation')
             # TODO: handle the path already existing
         except Exception as e:
-            logger.error(f'exception while performink mkdir operation for client {client_id} at path {path}:: {e}')
-            return utils.error(
-                msg=f'Unknown error while performing mkdir operation at path {path}'
-            )
+            logger.error(f'exception while performing mkdir operation for client {client_id} at path {path}:: {e}')
+            raise InternalServerError(msg=f'Unknown error while performing mkdir operation at path {path}')
         else:
+            logger.info(f'successfull mkdir for client {client_id} at path {path}')
             return utils.ok(
                 msg=f'Successfully created directory at {path}',
                 result=result.data,
                 metadata={'access_token': access_token}
             )
-        return utils.error(
-            msg=f'exception while performink mkdir operation for client {client_id} at path {path}'
-        )
+        raise InternalServerError(msg=f'exception while performing mkdir operation for client {client_id} at path {path}')
 
     # delete
     def delete(self, client_id, endpoint_id, path):
@@ -387,21 +352,19 @@ class OpsResource(Resource):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
         recurse = request.args.get('recurse', False)
+
         if not access_token or not refresh_token:
             logger.error('error parsing args')
-            return utils.error(
-                msg='Exception while parsing request parameters. Please check your request syntax and try again'
-                )
+            raise AuthenticationError(msg='Exception while parsing request parameters. Please check your request syntax and try again')
 
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
-            return utils.error(
-                msg='Given tokens are not valid. Try again with active auth tokens'
-            )
+            raise AuthenticationError(msg='Given tokens are not valid. Try again with active auth tokens')
         except Exception as e:
-            return utils.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
+            logger.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
+            raise InternalServerError()
             # TODO: handle more exceptions?
 
         # perform delete
@@ -416,9 +379,8 @@ class OpsResource(Resource):
             result = transfer_client.submit_delete(delete_task)
         except Exception as e:
             logger.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
-            return utils.error(
-                msg=f'Unknown error performing delete operation'
-            )
+            raise InternalServerError()
+        logger.info(f'Successful delete for client {client_id} at path {path}')
         return utils.ok(
             result=result.data,
             msg='Success'
@@ -430,20 +392,16 @@ class OpsResource(Resource):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
         dest = request.json.get('destination')
-        # logger.debug(f'in put (rename) have path {path} and dest {dest} given form {request.form} given values {request.values} given json {request.json}')
+
         if not access_token or not refresh_token:
             logger.error('error parsing args')
-            return utils.error(
-                msg='Exception while parsing request parameters. Please check your request syntax and try again'
-                )
+            raise AuthenticationError(msg='Exception while parsing request parameters. Please check your request syntax and try again')
 
         try:
             transfer_client = precheck(client_id, endpoint_id, access_token, refresh_token)
         except AuthenticationError:
             logger.error(f'Invalid token given for client {client_id}')
-            return utils.error(
-                msg='Given tokens are not valid. Try again with active auth tokens'
-            )
+            raise AuthenticationError(msg='Given tokens are not valid. Try again with active auth tokens')
         except Exception as e:
             return utils.error(f'exception while performing rename operation for client {client_id} at path {path}:: {e}')
             # TODO: handle more exceptions?
@@ -453,9 +411,8 @@ class OpsResource(Resource):
             result = transfer_client.operation_rename(endpoint_id, oldpath=path, newpath=dest)
         except Exception as e:
             logger.error(f'exception in rename with client {client_id}, endpoint {endpoint_id} and path {path}:: {e}')
-            return utils.error(
-                msg='Unknown error while performing rename'
-            )
+            raise InternalServerError(msg='Unknown error while performing rename')
+        logger.info(f'Successful rename for client {client_id} at path {path}')
         return utils.ok(
             msg=f'Success',
             result = result.data
@@ -480,13 +437,11 @@ class TransferResource(Resource):
             transfer_client = precheck(client_id, [src, dest], access_token, refresh_token)
             logger.debug(f'have tc:: {transfer_client}')
         except AuthenticationError:
-            return utils.error(
-                msg='Access token invalid. Please provide valid token.'
-            )
+            raise AuthenticationError(msg='Access token invalid. Please provide valid token.' )
         except Exception as e:
             logger.debug(f'failed to authenticate transfer client :: {e}')
-            return utils.error(msg='Failed to authenticate transfer client')
-            pass #TODO handle errors?
+            raise InternalServerError(msg='Failed to authenticate transfer client')
+            # TODO handle errors?
 
         try:
             if not is_endpoint_activated(transfer_client, src):
@@ -502,11 +457,9 @@ class TransferResource(Resource):
         result = (transfer(transfer_client, src, dest, items))
         if "File Transfer Failed" in result:
             logger.error(f'File transfer failed due to {result}')
-            return utils.error(
-                msg='File transfer failed'
-            )
-        # logger.debug(f'got res:: {result}')
+            raise GlobusError(msg='File transfer failed')
 
+        logger.info(f'Successful transfer for client {client_id} from {src} to {dest}')
         return utils.ok(
             result=result.data,
             msg=f'Success'
@@ -519,21 +472,18 @@ class ModifyTransferResource(Resource):
     def get(self, client_id, task_id):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
-        # transfer_client = OpsResource.ops_precheck(self, client_id, src, access_token, refresh_token)
+
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
             logger.error(f'error while getting transfer client for client id {client_id}: {e}')
-            return utils.error(
-                msg='Error while authenticating globus client'
-            )
+            raise InternalServerError(msg='Error while authenticating globus client')
         try:
             result = transfer_client.get_task(task_id)
         except Exception as e:
             logger.error(f'error while getting transfer task with id {task_id}: {e}')
-            return utils.error(
-                msg='Error retrieving transfer task'
-            )
+            raise InternalServerError(msg='Error retrieving transfer task')
+        logger.info(f'Successful modify with client {client_id} of task {task_id}')
         return utils.ok(
             result=result.data,
             msg='successfully retrieved transfer task'
@@ -543,20 +493,18 @@ class ModifyTransferResource(Resource):
     def delete(self, client_id, task_id):
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
+
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
         except Exception as e:
             logger.error(f'error while getting transfer client for client id {client_id}: {e}')
-            return utils.error(
-                msg='Error while authenticating globus client'
-            )
+            raise AuthenticationError(msg='Error while authenticating globus client')
         try:
             result = transfer_client.cancel_task(task_id)
         except Exception as e:
             logger.error(f'error while canceling transfer task with id {task_id}: {e}')
-            return utils.error(
-                msg='Error retrieving transfer task'
-            )
+            raise AuthenticationError(msg='Error retrieving transfer task')
+        logger.info(f'Successful delete with client {client_id} of task {task_id}')
         return utils.ok(
             result=result.data,
             msg='successfully canceled transfer task'

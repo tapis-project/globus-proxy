@@ -3,7 +3,7 @@ import os
 from flask import Flask
 from werkzeug.routing import BaseConverter
 from tapisservice.tapisflask.resources import HelloResource, ReadyResource
-from tapisservice.tapisflask.utils import TapisApi, flask_errors_dict
+from tapisservice.tapisflask.utils import TapisApi, flask_errors_dict, handle_error
 
 # from service.controllers import AuthURLResource, TokensResource
 # from service.controllers import *
@@ -21,8 +21,10 @@ class RegexConverter(BaseConverter):
 api = TapisApi(app, errors=flask_errors_dict)
 app.url_map.converters['regex'] = RegexConverter
 
-# error handling
-# TODO
+# Set up error handling
+api.handle_error = handle_error
+api.handle_exception = handle_error
+api.handle_user_exception = handle_error
 
 # Resources
 api.add_resource(AuthURLResource, '/v3/globus-proxy/auth/url/<client_id>')
