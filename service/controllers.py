@@ -147,7 +147,7 @@ class CheckTokensResource(Resource):
 
 class OpsResource(Resource):
 
-    def handle_transfer_error(code):
+    def handle_transfer_error(self, code):
         if code == "AuthenticationFailed":
             raise AuthenticationError(msg='Could not authenticate transfer client', code=401)
         elif code == "ClientError.NotFound":
@@ -238,7 +238,7 @@ class OpsResource(Resource):
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately
-            handle_transfer_error(e.code)
+            self.handle_transfer_error(e.code)
         except Exception as e:
             logger.error(f'exception while doing ls operation for client {client_id}:: {e}')
             raise InternalServerError()
@@ -276,7 +276,7 @@ class OpsResource(Resource):
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately
-            handle_transfer_error(e.code)
+            self.handle_transfer_error(e.code)
         except Exception as e:
             logger.error(f'exception performing mkdir for client {client_id} at path {path}:: {e}')
             raise InternalServerError(msg=f"Unkown error performing mkdir at path {path}. Please check request syntax and try again.")
@@ -290,7 +290,7 @@ class OpsResource(Resource):
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately
-            handle_transfer_error(e.code)
+            self.handle_transfer_error(e.code)
             # TODO: handle intermediate folder creation? e.g. path/to/thing instead of path/
         except Exception as e:
             logger.error(f'exception while performing mkdir operation for client {client_id} at path {path}:: {e}')
@@ -341,7 +341,7 @@ class OpsResource(Resource):
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately
-            handle_transfer_error(e.code)
+            self.handle_transfer_error(e.code)
         except Exception as e:
         # TODO: make sure path exists on endpoint
             logger.error(f'exception while performing delete operation for client {client_id} at path {path}:: {e}')
@@ -378,7 +378,7 @@ class OpsResource(Resource):
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately
-            handle_transfer_error(e.code)
+            self.handle_transfer_error(e.code)
         except Exception as e:
             logger.error(f'exception in rename with client {client_id}, endpoint {endpoint_id} and path {path}:: {e}')
             raise InternalServerError(msg='Unknown error while performing rename')
