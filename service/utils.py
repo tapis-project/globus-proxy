@@ -163,10 +163,11 @@ def precheck(client_id, endpoints, access_token, refresh_token):
         logger.debug(f'in precheck, have tc {transfer_client}')
 
         # allow operations that don't use endpoints to still use precheck
-        if endpoint is None:
+        if endpoints is None:
             return transfer_client
         
         # activate endpoint
+        # TODO: make sure the endpoint is connected if its a personal connect
         logger.debug(f'about to check eps:: {endpoints}')
         if not isinstance(endpoints, list):
             logger.debug('eps are not a list!')

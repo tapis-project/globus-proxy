@@ -177,10 +177,10 @@ class OpsResource(Resource):
             logger.error(f'Invalid token given for client {client_id}')
             msg='Access token invalid. Please provide valid token.'
             raise AuthenticationError(msg=msg, code=401)
-        except Exception:
-            logger.error(f'Unidentified error attempting to instatiate Globus SDK with client id: {client_id}')
-            logger.error(traceback.print_exc())
-            raise InternalServerError(msg="Internal server error")
+        # except Exception:
+        #     logger.error(f'Unidentified error attempting to instatiate Globus SDK with client id: {client_id}')
+        #     logger.error(traceback.print_exc())
+        #     raise InternalServerError(msg="Internal server error")
 
         # perform ls op
         try:
