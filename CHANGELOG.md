@@ -1,4 +1,4 @@
-1.3.0 - 2023-04-03
+1.3.1 - 2023-04-07
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
