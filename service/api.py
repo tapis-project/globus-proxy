@@ -4,6 +4,7 @@ from flask import Flask
 from werkzeug.routing import BaseConverter
 from tapisservice.tapisflask.resources import HelloResource, ReadyResource
 from tapisservice.tapisflask.utils import TapisApi, flask_errors_dict, handle_error
+from service.auth import authn_and_authz
 
 # from service.controllers import AuthURLResource, TokensResource
 # from service.controllers import *
@@ -20,6 +21,11 @@ class RegexConverter(BaseConverter):
 # flask api
 api = TapisApi(app, errors=flask_errors_dict)
 app.url_map.converters['regex'] = RegexConverter
+
+# authentication and authorization ---
+@app.before_request
+def authnz_for_authenticator():
+    authn_and_authz()
 
 # Set up error handling
 api.handle_error = handle_error
