@@ -23,9 +23,9 @@ api = TapisApi(app, errors=flask_errors_dict)
 app.url_map.converters['regex'] = RegexConverter
 
 # authentication and authorization ---
-@app.before_request
-def authnz_for_authenticator():
-    authn_and_authz()
+# @app.before_request
+# def authnz_for_authenticator():
+#     authn_and_authz()
 
 # Set up error handling
 api.handle_error = handle_error
