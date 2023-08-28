@@ -1,4 +1,4 @@
-1.3.1 - 2023-04-07
+1.5.0 - 2023-8-28
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
@@ -8,9 +8,9 @@ Breaking Changes:
 
 New features:
 
-    - Upgrade globus_sdk to 3.17
-    - More meaningful trace logs
+    Improved path building to account for systems which don't resolve /~/
 
 Bug fixes:
 
-    - fixed errors returning 200 codes
+    Fixed several bugs related to path sanitization logic
+    

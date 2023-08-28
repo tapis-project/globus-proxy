@@ -2,6 +2,7 @@ from ast import Pass
 from distutils.log import error
 import json
 from os import access
+import os
 import traceback
 
 from flask import Flask, current_app, request
@@ -155,7 +156,68 @@ class OpsResource(Resource):
         elif code == "ExternalError.DirListingFailed.GCDisconnected":
             raise GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
 
+    
+
     # ls
+    def build_path(self, path, default_dir=None):
+        logger.info(f'building path with path {path} and default {default_dir} ')
+        subpaths = ["~", "/~/", "~/", ".", "./"]
+        if path[-1] == "/":
+            path = path[:-1] # remove trailing slash
+        if path == "" and default_dir is not None:
+            return default_dir
+        for subpath in subpaths:
+            if path == subpath and default_dir is not None:
+                logger.info("1")
+                return default_dir
+            elif path.startswith(subpath):
+                newpath = path.replace(subpath, default_dir)
+                logger.info(f"2 :: {subpath} :: {path} --> {newpath} ")
+                return newpath
+        if path in subpaths:
+            if default_dir is not None:
+                logger.info("3")
+                return default_dir
+            else:
+                logger.info("4")
+                return ''
+        elif path.startswith('/'): # path is abs, assume valid
+            logger.info("5")
+            return path
+        # elif path.endswith('/'): # need to remove trailing /
+        #     return path[-len(path)]
+        elif path.startswith(default_dir): # path is valid, relative to default
+            logger.info("6")
+            return path
+        elif default_dir.split('/', 1)[1] in path: # path contains default, but it's irregular
+            # rebuild as abs default/path
+            orig_path = default_dir.split('/', 1)[1]
+            relative_path = path.split(orig_path, 1)[1]
+            logger.debug(f'rel path:: {relative_path} orig path:: {orig_path}')
+            newpath = f'{default_dir}/{relative_path}'
+            logger.info(f"7:: rel {relative_path} org {orig_path}")
+            return newpath
+        elif default_dir in path: # path has the default in it, but may be abs
+            # rebuild as abs default/path
+            newpath = f'{default_dir}/{path.split(default_dir)[1]}'
+            logger.info(f"8 :: {newpath}")
+            return newpath
+        else:
+            newpath = f'{default_dir}/{path}'
+            logger.info(f"9 :: {newpath}")
+            return newpath
+        raise InternalServerError # should always be one of the above options
+
+
+    def do_ls(self, transfer_client, endpoint_id, path, filter, query_dict):
+        return transfer_client.operation_ls(
+                endpoint_id=(endpoint_id),
+                path=path,
+                show_hidden=False,
+                filter=filter,
+                query_params=query_dict if query_dict != {} else None
+            )
+
     def get(self, client_id, endpoint_id, path):
         # parse args & perform precheck
         logger.debug(f'beginning ls with client:: {client_id} & path:: {path}')
@@ -183,58 +245,46 @@ class OpsResource(Resource):
         #     raise InternalServerError(msg="Internal server error")
 
         # perform ls op
+        logger.debug(f"performing ls with client {client_id} on endpoint {endpoint_id} and path {path}")
         try:
             query_dict = {}
-            if limit: 
+            if limit:
                 query_dict['limit'] = limit
             if offset:
                 query_dict['offset'] = offset
             logger.debug(f'have query dict:: {query_dict}')
+
             # call operation_ls to list everything in the directory
-            
-            split_path = path.rsplit("/", 1)
-            
-            if len(split_path) == 1:
-                    if split_path[0] == '.' or split_path[0] == '~':
-                        parent_dir = path # home directory, no need to change anything
-                    else:
-                        logger.error(f"{split_path} length is 1 but it's not the home directory.") 
-                        raise InternalServerError()
-            elif len(split_path) > 1:
-                parent_dir = path.rsplit("/", 1)[0]
-                child_name = path.rsplit("/", 1)[1]
-                # need to find out if requested object if a file or directory
-                logger.debug(f'checking parent dir: {parent_dir}')
-                try:
-                    result = transfer_client.operation_ls(
-                        endpoint_id=(endpoint_id),
-                        path=parent_dir
+            endpoint_info = transfer_client.get_endpoint(endpoint_id)
+            default_dir = endpoint_info.get("default_directory")
+            friendly_name = endpoint_info.get("display_name")
+            logger.debug(f'default dir of {friendly_name} is {default_dir}')
+
+            # sanitize path
+            built_path = self.build_path(path, default_dir)
+            logger.debug(f'built path: {built_path}')
+
+            try:
+                result = self.do_ls(transfer_client, endpoint_id, built_path, filter, query_dict)
+            except TransferAPIError as e:
+                if e.code == 'ExternalError.DirListingFailed.NotDirectory':
+                    # requested object is not a dir - assume single file instead
+                    filename = built_path.split('/', -1)[-1]
+                    parent_dir = '/'.join(built_path.split('/', -1)[:-1])
+                    filter=f'name:{filename}'
+                    logger.debug(f'trying single file filter "{filter}" on parent dir "{parent_dir}" / filename "{filename}"')
+                    result = self.do_ls(transfer_client, endpoint_id, parent_dir, filter, query_dict)
+                    return utils.ok(
+                        msg='Successfully listed files',
+                        result=result.data,
+                        metadata={'access_token': access_token}
                     )
-                    logger.debug("looping through gathered items")
-                    for item in result.data["DATA"]:
-                        name = item["name"]
-                        logger.debug(f"checking item with name {name}")
-                        if item["name"] != child_name: continue
-                        if item["type"] == "file":
-                            return utils.ok(
-                                result = item,
-                                msg="Successfully retrieved file"
-                            )
-                        elif item["type"] == "dir": break
-                except Exception as e:
-                    logger.error(f"encountered exception checking parent directory of path: {path} with client id {client_id}:: {e}")               
-                    raise InternalServerError()
-            else:
-                # something went wrong. This should never be 0.
-                logger.error(f'length of split path -- {path} -- was 0. This should never happen.')
-                raise PathNotFoundError(code=404)
-            result = transfer_client.operation_ls(
-                endpoint_id=(endpoint_id),
-                path=path,
-                filter=filter,
-                query_params=query_dict if query_dict != {} else None
-            )
-            # logger.debug(f'got result::{result}')
+                else:
+                    logger.error(f'error while checking parent directory of {built_path}:: {e}')
+                    raise InternalServerError
+            except Exception as e:
+                pass
+
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately
@@ -253,7 +303,7 @@ class OpsResource(Resource):
                 result=result.data,
                 metadata={'access_token': access_token}
             )
-        logger.error(f"Unknown error preforming list operation for client {client_id}")
+        logger.error(f"Unknown error preforming list operation for client {client_id} with path {path} -> {built_path if built_path else ''}")
         raise InternalServerError()
 
     # mkdir
