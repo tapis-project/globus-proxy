@@ -4,7 +4,7 @@ Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
 Breaking Changes:
 
-    None.
+    Users will need to pass an absolute path to any operations endpoint
 
 New features:
 

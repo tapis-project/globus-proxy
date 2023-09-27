@@ -4,6 +4,7 @@ import json
 from os import access
 import os
 import traceback
+import time
 
 from flask import Flask, current_app, request
 from flask_restful import Resource
@@ -11,13 +12,13 @@ from flask_restful import Resource
 from tapisservice.tapisflask import utils
 from tapisservice.tapisflask.resources import ReadyResource
 from tapisservice.logs import get_logger
-from tapisservice.errors import AuthenticationError
+from tapisservice.errors import AuthenticationError, BaseTapisError
 
 import globus_sdk
 from globus_sdk import TransferAPIError
 
 from utils import check_tokens, get_transfer_client, precheck, transfer, is_endpoint_activated, autoactivate_endpoint
-from errors import InternalServerError
+from errors import PathNotFoundError, InternalServerError, GlobusError
 
 from multiprocessing import AuthenticationError as PythonAuthenticationError
 
@@ -149,18 +150,61 @@ class CheckTokensResource(Resource):
 class OpsResource(Resource):
 
     def handle_transfer_error(self, code):
+        '''Tanslates transder api errors into the configured basetapiserrors in ./errors.py'''
+        error = InternalServerError(msg='Internal server error', code=500)
         if code == "AuthenticationFailed":
-            raise AuthenticationError(msg='Could not authenticate transfer client', code=401)
+            error = AuthenticationError(msg='Could not authenticate transfer client', code=401)
         elif code == "ClientError.NotFound":
-            raise PathNotFoundError(msg='Path does not exist on given endpoint', code=404)
+            error = PathNotFoundError(msg='Path does not exist on given endpoint', code=404)
         elif code == "ExternalError.DirListingFailed.GCDisconnected":
-            raise GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
+            error = GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
+        return error
 
-    
+    def get_parent_dir(self, path):
+        filename = path.split('/', -1)[-1]
+        parent_dir = '/'.join(path.split('/', -1)[:-1]) 
+        return filename, parent_dir
 
-    # ls
+    def poll(self, func, **kwargs):
+        logger.error('starting poll')
+        error = None
+        result = None
+        num_tries = 0
+
+        while result == None and num_tries < 5:
+            try:
+                num_tries = num_tries + 1
+                result = func(**kwargs)
+            except Exception as e:
+                logger.error(f'got {e.code} during polling')
+                error = e
+            else:
+                if result.http_status == 200:
+                    return result
+                if result.http_status == 404:
+                    self.handle_transfer_error(e.code)
+
+            finally:
+                if error == None and not result == None:
+                    return result
+                elif result == None and error == None:
+                    logger.error(f'both result and error are none')
+                else:
+                    raise error
+        
+
     def build_path(self, path, default_dir=None):
         logger.info(f'building path with path {path} and default {default_dir} ')
+        
+        if path.endswith('/'): # remove training slash
+            path = path[:-1]
+        
+        if not path.startswith('/'):
+            return f'/{path}'
+        else:
+            return path
+
+        # ----- this is all irrelevent for now, just make the path abs -----
         subpaths = ["~", "/~/", "~/", ".", "./"]
         if path[-1] == "/":
             path = path[:-1] # remove trailing slash
@@ -186,37 +230,42 @@ class OpsResource(Resource):
             return path
         # elif path.endswith('/'): # need to remove trailing /
         #     return path[-len(path)]
-        elif path.startswith(default_dir): # path is valid, relative to default
+        elif default_dir is not None and path.startswith(default_dir): # path is valid, relative to default
             logger.info("6")
             return path
-        elif default_dir.split('/', 1)[1] in path: # path contains default, but it's irregular
+        elif default_dir is not None: 
+            if default_dir.split('/', 1)[1] in path: # path contains default, but it's irregular
             # rebuild as abs default/path
-            orig_path = default_dir.split('/', 1)[1]
-            relative_path = path.split(orig_path, 1)[1]
-            logger.debug(f'rel path:: {relative_path} orig path:: {orig_path}')
-            newpath = f'{default_dir}/{relative_path}'
-            logger.info(f"7:: rel {relative_path} org {orig_path}")
-            return newpath
-        elif default_dir in path: # path has the default in it, but may be abs
+                orig_path = default_dir.split('/', 1)[1]
+                relative_path = path.split(orig_path, 1)[1]
+                logger.debug(f'rel path:: {relative_path} orig path:: {orig_path}')
+                newpath = f'{default_dir}/{relative_path}'
+                logger.info(f"7:: rel {relative_path} org {orig_path}")
+                return newpath
+        elif default_dir is not None and default_dir in path: # path has the default in it, but may be abs
             # rebuild as abs default/path
             newpath = f'{default_dir}/{path.split(default_dir)[1]}'
             logger.info(f"8 :: {newpath}")
             return newpath
-        else:
+        elif default_dir is not None:
             newpath = f'{default_dir}/{path}'
             logger.info(f"9 :: {newpath}")
             return newpath
+        else:
+            # idk bro just try whatever they sent
+            return path
         raise InternalServerError # should always be one of the above options
 
-
+    # ls
     def do_ls(self, transfer_client, endpoint_id, path, filter, query_dict):
-        return transfer_client.operation_ls(
+        result = transfer_client.operation_ls(
                 endpoint_id=(endpoint_id),
                 path=path,
                 show_hidden=False,
                 filter=filter,
                 query_params=query_dict if query_dict != {} else None
             )
+        return result
 
     def get(self, client_id, endpoint_id, path):
         # parse args & perform precheck
@@ -263,40 +312,55 @@ class OpsResource(Resource):
             # sanitize path
             built_path = self.build_path(path, default_dir)
             logger.debug(f'built path: {built_path}')
+            
 
             try:
-                result = self.do_ls(transfer_client, endpoint_id, built_path, filter, query_dict)
+                result = self.poll(self.do_ls, transfer_client=transfer_client, endpoint_id=endpoint_id, path=built_path, filter=filter, query_dict=query_dict)
+                # print(f'got res:: {result}')
+                # result = self.do_ls(transfer_client, endpoint_id, built_path, filter, query_dict)
             except TransferAPIError as e:
+                logger.debug(f'encountered {e.code} while checking {built_path}')
                 if e.code == 'ExternalError.DirListingFailed.NotDirectory':
+                    print('got not directory error - trying parent dir')
                     # requested object is not a dir - assume single file instead
-                    filename = built_path.split('/', -1)[-1]
-                    parent_dir = '/'.join(built_path.split('/', -1)[:-1])
+                    filename, parent_dir = self.get_parent_dir(built_path)
+                    if parent_dir == "":
+                        parent_dir = '/' # assume it's root
                     filter=f'name:{filename}'
                     logger.debug(f'trying single file filter "{filter}" on parent dir "{parent_dir}" / filename "{filename}"')
-                    result = self.do_ls(transfer_client, endpoint_id, parent_dir, filter, query_dict)
+                    result = self.poll(self.do_ls, transfer_client=transfer_client, endpoint_id=endpoint_id, path=parent_dir, filter=filter, query_dict=query_dict)
+                    # result = self.do_ls(transfer_client, endpoint_id, parent_dir, filter, query_dict)
                     return utils.ok(
                         msg='Successfully listed files',
                         result=result.data,
                         metadata={'access_token': access_token}
                     )
                 else:
-                    logger.error(f'error while checking parent directory of {built_path}:: {e}')
-                    raise InternalServerError
+                    error = self.handle_transfer_error(e.code)
+                    logger.error(error)
+                    raise error
             except Exception as e:
+                logger.error(f'this should not print. You got {e}')
                 pass
 
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
-            # api errors come through as specific codes, each one can be handled separately
-            self.handle_transfer_error(e.code)
+            error = self.handle_transfer_error(e.code)
+            raise error
         except Exception as e:
-            logger.error(f'exception while doing ls operation for client {client_id}:: {e}')
-            raise InternalServerError()
+            if isinstance(error, BaseTapisError):
+                logger.debug(f'error is a tapis error:: {e}')
+                raise e
+            else:
+
+                logger.error(f'exception while doing ls operation for client {client_id}:: {e}')
+                logger.error(traceback.format_exc())
+                raise InternalServerError()
         else:
             # TODO: if the tokens get refreshed live, we could have a race condition 
             # figure out a way to test if refreshed access tokens will cause a call to fail
                 # especially for concurrent ops
-            
+            # logger.debug(f'result is {result}')
             logger.info(f'Successfully listed files on path:: {path} for client {client_id}')
             return utils.ok(
                 msg='Successfully listed files',
@@ -307,6 +371,13 @@ class OpsResource(Resource):
         raise InternalServerError()
 
     # mkdir
+    def do_mkdir(self, transfer_client, endpoint_id, path):
+        result = transfer_client.operation_mkdir(
+                endpoint_id=endpoint_id,
+                path=path
+            )
+        return result
+
     def post(self, client_id, endpoint_id, path):
         # parse args and perform precheck
         logger.debug(f'in mkdir, have path:: {path}')
@@ -325,6 +396,7 @@ class OpsResource(Resource):
             raise AuthenticationError(msg='Given tokens are not valid. Try again with active auth tokens')
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
+            logger.error(f' tb:: {traceback.print_tb}')
             # api errors come through as specific codes, each one can be handled separately
             self.handle_transfer_error(e.code)
         except Exception as e:
@@ -333,10 +405,11 @@ class OpsResource(Resource):
 
         # perform mkdir op
         try:
-            result = transfer_client.operation_mkdir(
-                endpoint_id=endpoint_id,
-                path=path
-            )
+            # result = transfer_client.operation_mkdir(
+            #     endpoint_id=endpoint_id,
+            #     path=path
+            # )
+            result = self.do_mkdir(transfer_client, endpoint_id, path)
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately
@@ -355,6 +428,10 @@ class OpsResource(Resource):
         raise InternalServerError(msg=f'exception while performing mkdir operation for client {client_id} at path {path}')
 
     # delete
+    def do_delete(self, transfer_client, delete_task):
+        result = transfer_client.submit_delete(delete_task)
+        return result
+
     def delete(self, client_id, endpoint_id, path):
         # parse args and perform precheck
         logger.debug(f'in delete, have path:: {path}')
@@ -387,7 +464,8 @@ class OpsResource(Resource):
             )
             delete_task.add_item(path)
             logger.debug(f'have delete task:: {delete_task}')
-            result = transfer_client.submit_delete(delete_task)
+            # result = transfer_client.submit_delete(delete_task)
+            result = self.do_delete(transfer_client, delete_task)
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately
@@ -401,7 +479,13 @@ class OpsResource(Resource):
             result=result.data,
             msg='Success'
         )
+
+
     # rename
+    def do_rename(self, transfer_client, endpoint_id, oldpath, newpath):
+        result = transfer_client.operation_rename(endpoint_id, oldpath=path, newpath=dest)
+        return result
+
     def put(self, client_id, endpoint_id, path):
         # parse args and perform precheck
         transfer_client = None
@@ -424,7 +508,8 @@ class OpsResource(Resource):
 
         # perform rename
         try:
-            result = transfer_client.operation_rename(endpoint_id, oldpath=path, newpath=dest)
+            # result = transfer_client.operation_rename(endpoint_id, oldpath=path, newpath=dest)
+            result = self.do_rename(transfer_client, endpoint_id, path, dest)
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')
             # api errors come through as specific codes, each one can be handled separately

@@ -104,7 +104,7 @@ def transfer(tc, source_endpoint_id, dest_endpoint_id, files='', dirs='', label=
 
 def activate_endpoint(tc, ep_id, username, password):
     '''
-    ... with userame and password
+    ... with username and password
     '''
     activation_req = tc.endpoint_get_activation_requirements(ep_id).data
     for data in activation_req["DATA"]:
