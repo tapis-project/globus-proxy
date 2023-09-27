@@ -1,4 +1,4 @@
-1.5.0 - 2023-8-28
+1.4.3 - 2023-9-27
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
@@ -9,6 +9,8 @@ Breaking Changes:
 New features:
 
     Improved path building to account for systems which don't resolve /~/
+    Polling added to operations
+    Improved error handling and logging
 
 Bug fixes:
 
