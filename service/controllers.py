@@ -17,7 +17,7 @@ from tapisservice.errors import AuthenticationError, BaseTapisError
 import globus_sdk
 from globus_sdk import TransferAPIError
 
-from utils import check_tokens, get_transfer_client, precheck, transfer, is_endpoint_activated, autoactivate_endpoint
+from utils import check_tokens, get_transfer_client, precheck, transfer, is_endpoint_activated, autoactivate_endpoint, is_endpoint_connected
 from errors import PathNotFoundError, InternalServerError, GlobusError
 
 from multiprocessing import AuthenticationError as PythonAuthenticationError
@@ -313,7 +313,6 @@ class OpsResource(Resource):
             built_path = self.build_path(path, default_dir)
             logger.debug(f'built path: {built_path}')
             
-
             try:
                 result = self.poll(self.do_ls, transfer_client=transfer_client, endpoint_id=endpoint_id, path=built_path, filter=filter, query_dict=query_dict)
                 # print(f'got res:: {result}')
@@ -526,11 +525,18 @@ class OpsResource(Resource):
 
 class TransferResource(Resource):
     def post(self, client_id):
-        access_token = request.args.get('access_token')
-        refresh_token = request.args.get('refresh_token')
-        src = request.json.get('source_endpoint')
-        dest = request.json.get('destination_endpoint')
-        items = request.json.get('transfer_items')
+        logger.info(f'Beginning creation of transfer task for client: {client_id} with args: {request.args} and json: {request.json}')
+        logger.debug(f'request headers:: {request.headers}')
+
+        ## parse args
+        try:
+            access_token = request.args.get('access_token')
+            refresh_token = request.args.get('refresh_token')
+            src = request.json.get('source_endpoint')
+            dest = request.json.get('destination_endpoint')
+            items = request.json.get('transfer_items')
+        except Exception as e:
+            logger.error(f'Error parsing args for request:: {e}')
 
         logger.debug(f'have setup args \n{access_token}\n{refresh_token}\n{src}\n{dest}\n{items}')
 
@@ -538,14 +544,18 @@ class TransferResource(Resource):
             logger.error('error parsing args')
             raise AuthenticationError(msg='Exception while parsing request parameters. Please check your request syntax and try again')
 
+        ## get xfer client
         transfer_client = None
         try:
             transfer_client = precheck(client_id, [src, dest], access_token, refresh_token)
             logger.debug(f'have tc:: {transfer_client}')
+        except GlobusError as e:
+            raise e
         except Exception as e:
             logger.error(f'failed to authenticate transfer client :: {e}')
             raise InternalServerError(msg='Failed to authenticate transfer client')
 
+        ## perform request
         result = (transfer(transfer_client, src, dest, items))
         if "File Transfer Failed" in result:
             logger.error(f'File transfer failed due to {result}')

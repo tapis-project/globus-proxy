@@ -1,4 +1,4 @@
-from multiprocessing import AuthenticationError as PythonPythonAuthenticationError
+from multiprocessing import AuthenticationError as PythonAuthenticationError
 from datetime import datetime, timedelta
 import globus_sdk
 
@@ -167,7 +167,6 @@ def precheck(client_id, endpoints, access_token, refresh_token):
             return transfer_client
         
         # activate endpoint
-        # TODO: make sure the endpoint is connected if its a personal connect
         logger.debug(f'about to check eps:: {endpoints}')
         if not isinstance(endpoints, list):
             logger.debug('eps are not a list!')
@@ -175,28 +174,51 @@ def precheck(client_id, endpoints, access_token, refresh_token):
             endpoints = list(endpoints.split())
             logger.debug(f'have ep list:: {endpoints}')
         for endpoint_id in endpoints:
+            endpoint_info = transfer_client.get_endpoint(endpoint_id)
+            endpoint_type = endpoint_info["entity_type"]
+            if endpoint_type == "GCP_mapped_collection": # if it's a globus connect personal ep
+                connected = is_endpoint_connected(transfer_client, endpoint_id)
+                if not connected:
+                    logger.error(f'Endpoint {endpoint_id} is a Globus Connect Personal endpoint and must be manuallty connected')
+                    raise GlobusError(msg=f'Endpoint {endpoint_id} is a Globus Connect Personal endpoint and must be manuallty connected')
             logger.debug(f'checking ep {endpoint_id}')
             if not is_endpoint_activated(transfer_client, endpoint_id):
                 logger.debug(f'ep {endpoint_id} is not active')
                 autoactivate_endpoint(transfer_client, endpoint_id)
         return transfer_client
             
-
 def autoactivate_endpoint(transfer_client, endpoint_id):
     try:
         logger.info(f'Trying to autoactivate endpoint {endpoint_id}')
         result = transfer_client.endpoint_autoactivate(endpoint_id)
         logger.debug(f'have res:: {result}')
-        if result['code'] == "AutoActivationFailed":
-            logger.error(f'endpoint activation failed. Endpoint {endpoint_id} must be manuallty activated')
-            raise GlobusError(msg=f'endpoint activation failed. Activate endpoint {endpoint_id} by going to https://app.globus.org/file-manager?origin_id={endpoint_id}')
-            # TODO: spawn thread that waits for activation?
     except PythonAuthenticationError as e:
         logger.error(f'Endpoint activation failed due to invalid token. Endpoint {endpoint_id} must be manuallty activated')
         raise PythonAuthenticationError()
     except Exception as e:
         logger.error(f'Unknown exception activating endpoint with id {endpoint_id} :: {e}')
-        raise InternalServerError()
+        # raise InternalServerError()
+        raise GlobusError(msg=f"Endpoint activation failed due to unknown error. Endpoint {endpoint_id} must be manuallty activated")
+    finally:
+        if result['code'] == "AutoActivationFailed":
+            logger.error(f'Endpoint activation failed. Endpoint {endpoint_id} must be manuallty activated')
+            raise GlobusError(msg=f'Endpoint activation failed. Activate endpoint {endpoint_id} by going to https://app.globus.org/file-manager?origin_id={endpoint_id}')
+            # TODO: spawn thread that waits for activation?
+
+def is_endpoint_connected(transfer_client, endpoint_id):
+    logger.debug(f'in is_endpoint_connected with tc: {transfer_client}, ep: {endpoint_id}')
+    try:
+        result = transfer_client.get_endpoint(endpoint_id)
+    except Exception as e:
+        logger.error(f'Unknown exception getting endpoint with id {endpoint_id}:: {e}')
+    finally:
+        try:
+            connected = result["DATA"][0]["is_connected"]
+        except Exception as e:
+            logger.error(f'Unknown exception getting endpoint connection status with id: {endpoint_id}: {e}')
+        logger.debug(f'endpoint connection status:: {connected}')
+        # return connected
+        return True
     
 
 

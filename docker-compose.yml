@@ -6,13 +6,13 @@ services:
     globus-proxy:
         # image: tapis/globus-proxy
         build: .
-        ports:
-            - "5000:5000"
         volumes:
             - ./configschema.json:/home/tapis/configschema.json
             - ./config-local.json:/home/tapis/config.json
             - ./service.log:/home/tapis/service.log
         container_name: globus-proxy
+        networks: 
+            - tapis
 
     # globus_proxy-tests:
     #     build: 
@@ -22,3 +22,6 @@ services:
     #         - ./config-local.json:/home/tapis/config.json
 
 
+networks:
+    tapis:
+        external: true
