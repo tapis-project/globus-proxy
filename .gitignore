@@ -1,4 +1,4 @@
 # Intellij files
 .idea/*
 config-local.json
-
+*pycache*

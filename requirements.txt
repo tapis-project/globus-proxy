@@ -1,1 +1,3 @@
 globus_sdk==3.17
+tapipy
+requests
