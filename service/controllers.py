@@ -21,6 +21,7 @@ from utils import check_tokens, get_transfer_client, precheck, transfer, is_endp
 from errors import PathNotFoundError, InternalServerError, GlobusError
 
 from multiprocessing import AuthenticationError as PythonAuthenticationError
+from globus_sdk.scopes import TransferScopes
 
 logger = get_logger(__name__)
 app = Flask(__name__)
@@ -44,7 +45,7 @@ class AuthURLResource(Resource):
             msg = f'Encountered exception while initializing globus_sdk for client {client_id}\n\t{e}'
             logger.error(msg)
             raise InternalServerError(msg=msg)
-        session_client = client.oauth2_start_flow(refresh_tokens=True)
+        session_client = client.oauth2_start_flow(refresh_tokens=True, requested_scopes=[TransferScopes.all])
         authorize_url = client.oauth2_get_authorize_url()
         logger.debug(f"successfully got auth url for client {client_id}")
         return utils.ok(

@@ -1,9 +1,15 @@
+## builtin
 from multiprocessing import AuthenticationError as PythonAuthenticationError
 from datetime import datetime, timedelta
+
+## globus
 import globus_sdk
 
+## tapis
 from tapisservice.logs import get_logger
 from tapisservice.tapisflask import utils
+
+## local
 from errors import *
 
 logger = get_logger(__name__)
