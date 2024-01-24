@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 ## globus
 import globus_sdk
+from globus_sdk.scopes import TransferScopes
 
 ## tapis
 from tapisservice.logs import get_logger
@@ -28,30 +29,51 @@ def get_transfer_client(client_id, refresh_token, access_token):
     transfer_client = globus_sdk.TransferClient(authorizer=authorizer)
     return transfer_client
 
+def start_auth_flow(client, scopes=TransferScopes.all):
+    client.oauth2_start_flow(refresh_tokens=True, requested_scopes=scopes)
+    authorize_url = client.oauth2_get_authorize_url()
+    return authorize_url
+
+def check_consent_required(client, target):
+    '''
+    Checks if an endpoint required consent before operations can be made against it
+    returns a list of scopes so we can send it through the auth flow again 
+    '''
+    consent_required_scopes = []
+    try:
+        ls_endpoint(client, target)
+    except globus_sdk.TransferAPIError as e:
+        if e.info.consent_required:
+            consent_required_scopes.extend(e.info.consent_required.required_scopes)
+    return consent_required_scopes
+
+
 def check_tokens(client_id, refresh_token, access_token):
     '''
+    *** oauth2_validate_token has been deprecated ***
+
     Small utility function to check the validity of a globus auth token pair. 
     If refresh_token is invalid, raises PythonAuthenticationError - you must then go through the auth process again to get a new token pair
     If access_token is expired, gets a new one
 
     returns valid token pair
     '''
-    client = globus_sdk.AuthClient(client_id=client_id)
-    # validate rf token, raise autherror if invalid
-    try:
-        response = client.oauth2_validate_token(refresh_token)
-    except Exception as e:
-        logger.error(f'exception while validating refresh token:: {e}')
-        raise PythonAuthenticationError
-    else:
-        active = response['active']
-        if not active:
-            raise PythonAuthenticationError
-    try:
-        response= client.oauth2_validate_token(access_token)
-    except Exception as e:
-        logger.error(f'exception while validating access token:: {e}')
-        access_token = get_valid_token(client_id, refresh_token)
+    # client = globus_sdk.AuthClient(client_id=client_id)
+    # # validate rf token, raise autherror if invalid
+    # try:
+    #     response = client.oauth2_validate_token(refresh_token)
+    # except Exception as e:
+    #     logger.error(f'exception while validating refresh token:: {e}')
+    #     raise PythonAuthenticationError
+    # else:
+    #     active = response['active']
+    #     if not active:
+    #         raise PythonAuthenticationError
+    # try:
+    #     response= client.oauth2_validate_token(access_token)
+    # except Exception as e:
+    #     logger.error(f'exception while validating access token:: {e}')
+    #     access_token = get_valid_token(client_id, refresh_token)
 
     return access_token, refresh_token
 

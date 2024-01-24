@@ -16,8 +16,9 @@ from tapisservice.errors import AuthenticationError, BaseTapisError
 
 import globus_sdk
 from globus_sdk import TransferAPIError
+from globus_sdk.experimental.auth_requirements_error import GlobusAuthRequirementsError
 
-from utils import check_tokens, get_transfer_client, precheck, transfer, is_endpoint_activated, autoactivate_endpoint, is_endpoint_connected
+from utils import check_tokens, get_transfer_client, precheck, transfer, is_endpoint_activated, autoactivate_endpoint, is_endpoint_connected, start_auth_flow
 from errors import PathNotFoundError, InternalServerError, GlobusError
 
 from multiprocessing import AuthenticationError as PythonAuthenticationError
@@ -45,8 +46,9 @@ class AuthURLResource(Resource):
             msg = f'Encountered exception while initializing globus_sdk for client {client_id}\n\t{e}'
             logger.error(msg)
             raise InternalServerError(msg=msg)
-        session_client = client.oauth2_start_flow(refresh_tokens=True, requested_scopes=[TransferScopes.all])
-        authorize_url = client.oauth2_get_authorize_url()
+        # session_client = client.oauth2_start_flow(refresh_tokens=True, requested_scopes=[TransferScopes.all])
+        # authorize_url = client.oauth2_get_authorize_url()
+        authorize_url = start_auth_flow(client)
         logger.debug(f"successfully got auth url for client {client_id}")
         return utils.ok(
                 result = {"url": authorize_url, "session_id": session_client.verifier}, 
@@ -75,7 +77,7 @@ class TokensResource(Resource):
         except globus_sdk.services.auth.errors.AuthAPIError:
             msg = f'Invalid auth code given for client {client_id}'
             logger.error(msg)
-            raise AuthenticationError(msg=msg, code=500)
+            raise AuthenticationError(msg=msg, code=401)
         else:
             try:
                 access_token = token_response['transfer.api.globus.org']['access_token']
@@ -113,21 +115,22 @@ class CheckTokensResource(Resource):
         ac_token = ''
         rf_token = ''
 
+        ### 1/23/2024 oauth2_validate_token has been deprecated
         # check if given tokens are valid
-        client = globus_sdk.NativeAppAuthClient(endpoint_id)
-        try:
-            ac_response = client.oauth2_validate_token(access_token)
-            rf_response = client.oauth2_validate_token(refresh_token)
-        except:
-            logger.debug('Unknown error checking validity of tokens')
-            return utils.error(
-                msg = 'Unable to check validity of given tokens'
-            )
-        else:
-            logger.debug(f'ac:: {ac_response}')
-            logger.debug(f'rf:: {rf_response}')
-            ac_token = access_token if ac_response['active'] == True else None
-            rf_token = refresh_token if rf_response['active'] == True else None
+        # client = globus_sdk.NativeAppAuthClient(endpoint_id)
+        # try:
+        #     ac_response = client.oauth2_validate_token(access_token)
+        #     rf_response = client.oauth2_validate_token(refresh_token)
+        # except:
+        #     logger.debug('Unknown error checking validity of tokens')
+        #     return utils.error(
+        #         msg = 'Unable to check validity of given tokens'
+        #     )
+        # else:
+        #     logger.debug(f'ac:: {ac_response}')
+        #     logger.debug(f'rf:: {rf_response}')
+        #     ac_token = access_token if ac_response['active'] == True else None
+        #     rf_token = refresh_token if rf_response['active'] == True else None
 
         # if either token is none, get new tokens
         if ac_token is None or rf_token is None:
@@ -176,7 +179,11 @@ class OpsResource(Resource):
             try:
                 num_tries = num_tries + 1
                 result = func(**kwargs)
+                logger.debug(f'polling round {num_tries} have result:: {result}')
+            except GlobusAuthRequirementsError as e:
+                print(f'its all messed up:: {e}')
             except Exception as e:
+                logger.error(e)
                 logger.error(f'got {e.code} during polling')
                 error = e
             else:
@@ -184,7 +191,6 @@ class OpsResource(Resource):
                     return result
                 if result.http_status == 404:
                     self.handle_transfer_error(e.code)
-
             finally:
                 if error == None and not result == None:
                     return result
@@ -259,13 +265,25 @@ class OpsResource(Resource):
 
     # ls
     def do_ls(self, transfer_client, endpoint_id, path, filter, query_dict):
-        result = transfer_client.operation_ls(
-                endpoint_id=(endpoint_id),
-                path=path,
-                show_hidden=False,
-                filter=filter,
-                query_params=query_dict if query_dict != {} else None
-            )
+        logger.debug(f'in do_ls with {endpoint_id} {path} {filter} {query_dict}')
+        try:
+            result = transfer_client.operation_ls(
+                    endpoint_id=(endpoint_id),
+                    path=path,
+                    show_hidden=False,
+                    filter=filter,
+                    query_params=query_dict if query_dict != {} else None
+                )
+        except globus_sdk.TransferAPIError as e:
+            # if the error is something other than consent_required, reraise it
+            if not e.info.consent_required:
+                raise
+            else:
+                ## ???
+                pass
+        except Exception as e:
+            logger.error(f'exception while doing ls:: {e}')
+        logger.debug(f'did ls, got result:: {result}')
         return result
 
     def get(self, client_id, endpoint_id, path):
@@ -316,8 +334,7 @@ class OpsResource(Resource):
             
             try:
                 result = self.poll(self.do_ls, transfer_client=transfer_client, endpoint_id=endpoint_id, path=built_path, filter=filter, query_dict=query_dict)
-                # print(f'got res:: {result}')
-                # result = self.do_ls(transfer_client, endpoint_id, built_path, filter, query_dict)
+                logger.debug(f'polling completed')
             except TransferAPIError as e:
                 logger.debug(f'encountered {e.code} while checking {built_path}')
                 if e.code == 'ExternalError.DirListingFailed.NotDirectory':
@@ -340,7 +357,7 @@ class OpsResource(Resource):
                     logger.error(error)
                     raise error
             except Exception as e:
-                logger.error(f'this should not print. You got {e}')
+                logger.error(f'this should not print. You got:: {e}')
                 pass
 
         except TransferAPIError as e:

@@ -3,7 +3,11 @@ import os
 from datetime import datetime
 import json
 import requests
+
+# tapis
 from tapisservice.tapisflask import utils
+
+# local
 from utils import *
 
 
@@ -14,9 +18,10 @@ class Base:
     source = None 
     at = None 
     rt = None 
+    base_url = None
 
     def __init__(self):
-        config = self.load_config()
+        self.config = self.load_config()
 
     def load_config(self):
         with open(os.path.join(f"{os.path.expanduser('~')}/gpsettings.json")) as file:
@@ -26,6 +31,7 @@ class Base:
             self.source_eid = "722751ce-1264-43b8-9160-a9272f746d78" # ESnet CERN DTN (Anonymous read-only testing)
             self.at = self.config["access_token"]
             self.rt = self.config["refresh_token"]
+            self.base_url = self.config["base_url"]
             return self.config
 
 def transfer_test():
@@ -52,7 +58,7 @@ def transfer_test():
     }
 
     try:
-        response = requests.post(f"https://dev.kprice01.tacc.utexas.edu/v3/globus-proxy/transfers/{base.cid}", json=data, params=query, headers=headers)
+        response = requests.post(f"{base.base_url}/transfers/{base.cid}", json=data, params=query, headers=headers)
     except Exception as e:
         print(f'exception calling globus-proxy:: {e}')
 
@@ -60,7 +66,7 @@ def transfer_test():
     try:
         assert response.status_code == 200
     except AssertionError as e:
-        print(f'assertion failed. Status code is {response.status_code}.\n\t{response}')
+        print(f'assertion failed. Status code is {response.status_code}.\n\t{response.text}')
     
     task_id = response.json()['result']['task_id']
     logger.debug(f'Submitted transfer job with client {base.cid} and task id {task_id}')
@@ -69,12 +75,17 @@ def transfer_test():
     exit = False
     runs = 0
     while not exit:
-        response = requests.get(f'https://dev.kprice01.tacc.utexas.edu/globus-proxy/transfers/{base.cid}/{task_id}').json()
+        response = requests.get(f'{base.base_url}/transfers/{base.cid}/{task_id}?access_token={base.at}&refresh_token={base.rt}')
+        if not response.ok:
+            continue ## this means we got some other bogus code so just try again
+        logger.debug(f'got response:: {response.text}')
+        response = response.json()
         status = None
         try:
             status = response['result']['status']
         except Exception as e:
             print(f'IDK bro {e}')
+            exit = True
 
         if status == 'SUCCEEDED':
             logger.info('polling completed. Transfer success')
@@ -89,7 +100,6 @@ def endpoint_test():
     try:
         tc = get_transfer_client(base.cid, base.rt, base.at)
         # print(f'have tc:: {tc}')
-        
     except Exception as e:
         print(f'get tc fail! {e}')
 
@@ -99,6 +109,25 @@ def endpoint_test():
     except Exception as e:
         print(f'get endpoint fail! {e}')
 
+def ls_test():
+    base = Base()
+    try:
+        tc = get_transfer_client(base.cid, base.rt, base.at)
+        # print(f'have tc:: {tc}')
+    except Exception as e:
+        print(f'get tc fail! {e}')
+
+    url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/~'
+    query = {"access_token": base.at,
+             "refresh_token": base.rt}
+    logger.debug(f'have url:: {url} and params {query}')
+    response = requests.get(url, params=query)
+    logger.debug(response)
+    logger.debug(response.text)
+
+    
+
 if __name__ == '__main__':
     # endpoint_test()
     transfer_test()
+    ls_test()

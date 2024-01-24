@@ -1,3 +1,2 @@
-globus_sdk==3.17
-tapipy
+globus_sdk==3.34
 requests
