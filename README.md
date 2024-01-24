@@ -51,6 +51,9 @@ $ curl http://localhost:5000/v3/globus-proxy/auth/tokens/<client id>/<session id
 
 Both of these tokens (access token and refresh token) must be sent in every request made to the Globus-Proxy api.
 
+#### Consent Management
+Some endpoints will require an additional 'consent' auth flow. If you are using one of these endpoints, you will have to navigate to the URL provided in the response -- similar to the initial call for requesting a token -- and authorize the globus client to manage this endpoint.
+
 #### Initiate a Transfer
 In order to transfer a file between two endpoints, you will need to know the id of both endpoints and have a valid token pair for a Globus transfer client. 
 
