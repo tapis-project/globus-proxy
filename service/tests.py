@@ -6,10 +6,13 @@ import requests
 
 # tapis
 from tapisservice.tapisflask import utils
+from tapisservice.logs import get_logger
 
 # local
 from utils import *
 
+
+logger = get_logger(__name__)
 
 class Base:
     config = None 
@@ -108,8 +111,10 @@ def endpoint_test():
         print(info)
     except Exception as e:
         print(f'get endpoint fail! {e}')
+    
 
 def ls_test():
+    logger.info(f' ~~~ listing "~" ~~~')
     base = Base()
     try:
         tc = get_transfer_client(base.cid, base.rt, base.at)
@@ -124,10 +129,50 @@ def ls_test():
     response = requests.get(url, params=query)
     logger.debug(response)
     logger.debug(response.text)
+    logger.info(' ~~~ done ~~~\n')
+
+def ls_test_empty():
+    logger.info(f' ~~~ listing "" ~~~')
+    base = Base()
+    try:
+        tc = get_transfer_client(base.cid, base.rt, base.at)
+        # print(f'have tc:: {tc}')
+    except Exception as e:
+        print(f'get tc fail! {e}')
+
+    url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/'
+    query = {"access_token": base.at,
+             "refresh_token": base.rt}
+    logger.debug(f'have url:: {url} and params {query}')
+    response = requests.get(url, params=query)
+    logger.debug(response)
+    logger.debug(response.text)
+    logger.info(' ~~~ done ~~~\n')
+
+def ls_test_file():
+    path = 'home/kprice/gpsettings.json'
+    logger.info(f' ~~~ listing "{path}" ~~~')
+    base = Base()
+    try:
+        tc = get_transfer_client(base.cid, base.rt, base.at)
+        # print(f'have tc:: {tc}')
+    except Exception as e:
+        print(f'get tc fail! {e}')
+
+    url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/{path}'
+    query = {"access_token": base.at,
+             "refresh_token": base.rt}
+    logger.debug(f'have url:: {url} and params {query}')
+    response = requests.get(url, params=query)
+    logger.debug(response)
+    logger.debug(response.text)
+    logger.info(' ~~~ done ~~~\n')
 
     
 
 if __name__ == '__main__':
     # endpoint_test()
-    transfer_test()
+    # transfer_test()
     ls_test()
+    ls_test_empty()
+    ls_test_file()
