@@ -57,7 +57,7 @@ class AuthURLResource(Resource):
                 result = {"url": authorize_url, "session_id": session_client.verifier}, 
                 msg = f'Please go to the URL and login'
             )
- 
+
 class TokensResource(Resource):
     """
     exchange client_id, session_id, & auth code for access and refresh tokens
@@ -182,8 +182,10 @@ class OpsResource(Resource):
                 raise Exception(f"Expected http status code 200 | Recieved {str(result.http_status)}")
             return result
         except Exception as e:
-            if type(e) in reraise: raise e
-            logger.warn(f"Error while retrying: {str(e)}")
+            if type(e) in reraise:
+                logger.debug(f"Re-raising exception | {e}")
+                raise e
+            logger.warn(f"Error while retrying: {e}")
             attempts += 1
             if attempts == max_attempts:
                 logger.error(f"Error: Max retries reached | Last Error: {e}")
@@ -193,61 +195,13 @@ class OpsResource(Resource):
         
 
     def format_path(self, path, default_dir=None):
+        '''
+        Force absoulte paths for now, due to Globus not ahndling /~/ the same way on all systems
+        if a user provides a relative path, it will instead be returned as an INCORRECT abs path.
+        '''
         logger.info(f'building path with path {path} and default {default_dir} ')
         
         return f"/{path.rstrip('/').lstrip('/')}"
-        
-        # ----- this is all irrelevent for now, just make the path abs -----
-        # TODO 
-        # subpaths = ["~", "/~/", "~/", ".", "./"]
-        # path = path.rstrip("/")
-        # if path == "" and default_dir is not None:
-        #     return default_dir
-        # for subpath in subpaths:
-        #     if path == subpath and default_dir is not None:
-        #         logger.info("1")
-        #         return default_dir
-        #     elif path.startswith(subpath):
-        #         newpath = path.replace(subpath, default_dir)
-        #         logger.info(f"2 :: {subpath} :: {path} --> {newpath} ")
-        #         return newpath
-        # if path in subpaths:
-        #     if default_dir is not None:
-        #         logger.info("3")
-        #         return default_dir
-        #     else:
-        #         logger.info("4")
-        #         return ''
-        # elif path.startswith('/'): # path is abs, assume valid
-        #     logger.info("5")
-        #     return path
-        # # elif path.endswith('/'): # need to remove trailing /
-        # #     return path[-len(path)]
-        # elif default_dir is not None and path.startswith(default_dir): # path is valid, relative to default
-        #     logger.info("6")
-        #     return path
-        # elif default_dir is not None: 
-        #     if default_dir.split('/', 1)[1] in path: # path contains default, but it's irregular
-        #     # rebuild as abs default/path
-        #         orig_path = default_dir.split('/', 1)[1]
-        #         relative_path = path.split(orig_path, 1)[1]
-        #         logger.debug(f'rel path:: {relative_path} orig path:: {orig_path}')
-        #         newpath = f'{default_dir}/{relative_path}'
-        #         logger.info(f"7:: rel {relative_path} org {orig_path}")
-        #         return newpath
-        # elif default_dir is not None and default_dir in path: # path has the default in it, but may be abs
-        #     # rebuild as abs default/path
-        #     newpath = f'{default_dir}/{path.split(default_dir)[1]}'
-        #     logger.info(f"8 :: {newpath}")
-        #     return newpath
-        # elif default_dir is not None:
-        #     newpath = f'{default_dir}/{path}'
-        #     logger.info(f"9 :: {newpath}")
-        #     return newpath
-        # else:
-        #     # idk bro just try whatever they sent
-        #     return path
-        # raise InternalServerError # should always be one of the above options
 
     # ls
     def do_ls(self, transfer_client, endpoint_id, path, filter_, query_dict):
@@ -264,14 +218,13 @@ class OpsResource(Resource):
         except globus_sdk.TransferAPIError as e:
             # if the error is something other than consent_required, reraise it
             if not e.info.consent_required:
-                raise
-            else:
-                ## ???
-                pass
+                # FIXME: do consent auth flow
+                raise e
+            raise self.handle_transfer_error(e)
         except Exception as e:
             logger.error(f'exception while doing ls:: {e}')
-        else:
-            logger.debug(f'did ls, got result:: {result}')
+            raise e
+        
         return result
 
     def get(self, client_id, endpoint_id, path):
@@ -388,10 +341,6 @@ class OpsResource(Resource):
 
         # perform mkdir op
         try:
-            # result = transfer_client.operation_mkdir(
-            #     endpoint_id=endpoint_id,
-            #     path=path
-            # )
             result = self.do_mkdir(transfer_client, endpoint_id, path)
         except TransferAPIError as e:
             logger.error(f'transfer api error for client {client_id}: {e}, code:: {e.code}')

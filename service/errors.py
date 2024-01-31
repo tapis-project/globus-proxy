@@ -1,6 +1,6 @@
 from tapisservice.errors import BaseTapisError
 
-
+### reference of base tapis error imported above
 # class BaseTapisError(Exception):
 #     """
 #     Base Tapis error class. All Error types should descend from this class.
@@ -23,13 +23,18 @@ class InternalServerError(BaseTapisError):
     
 class PathNotFoundError(BaseTapisError):
     """Given path is not found on the endpoint"""
-    def __init__(self, msg=None, code=404):
+    def __init__(self, msg="Given path is not found on the endpoint", code=404):
         super().__init__(msg, code)
     pass
 
 class GlobusError(BaseTapisError):
     """General error with the Globus SDK"""
-    def __init__(self, msg=None, code=407):
+    def __init__(self, msg="Uncaught Globus error", code=407):
+        super().__init__(msg, code)
+    pass
+
+class GlobusConsentRequired(BaseTapisError):
+    def __init__(self, msg="Endpoint requires consent", code=407):
         super().__init__(msg, code)
     pass
 
