@@ -509,6 +509,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RespEndpointArray'
+        '409':
+          description: Directory already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespBasic'
         '500':
           description: Server error.
           content:

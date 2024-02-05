@@ -3,6 +3,8 @@ import os
 from datetime import datetime
 import json
 import requests
+from typing import List
+from functools import partial
 
 # tapis
 from tapisservice.tapisflask import utils
@@ -37,68 +39,8 @@ class Base:
             self.base_url = self.config["base_url"]
             return self.config
 
-def transfer_test():
-    base = Base()
 
-    data = {
-        "source_endpoint": base.source_eid,
-        "destination_endpoint": base.gcp_eid,
-        "transfer_items": [
-
-            {
-                "source_path": "/1M.dat",
-                "destination_path": "/home/kprice/tmp/globus_xfer/1M.dat",
-                "recursive": "true"
-            }
-        ]
-    }
-    query = {
-        "access_token": base.at,
-        "refresh_token": base.rt
-    }
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    try:
-        response = requests.post(f"{base.base_url}/transfers/{base.cid}", json=data, params=query, headers=headers)
-    except Exception as e:
-        print(f'exception calling globus-proxy:: {e}')
-
-    print(response.status_code)
-    try:
-        assert response.status_code == 200
-    except AssertionError as e:
-        print(f'assertion failed. Status code is {response.status_code}.\n\t{response.text}')
-    
-    task_id = response.json()['result']['task_id']
-    logger.debug(f'Submitted transfer job with client {base.cid} and task id {task_id}')
-
-    # poll for status of transfer
-    exit = False
-    runs = 0
-    while not exit:
-        response = requests.get(f'{base.base_url}/transfers/{base.cid}/{task_id}?access_token={base.at}&refresh_token={base.rt}')
-        if not response.ok:
-            continue ## this means we got some other bogus code so just try again
-        logger.debug(f'got response:: {response.text}')
-        response = response.json()
-        status = None
-        try:
-            status = response['result']['status']
-        except Exception as e:
-            print(f'IDK bro {e}')
-            exit = True
-
-        if status == 'SUCCEEDED':
-            logger.info('polling completed. Transfer success')
-            exit = True
-        elif runs == 10:
-            exit = True
-            logger.info(f'polling ran 10 times but didn\'t get success state. Bummer.')
-
-
-def endpoint_test():
+def get_endpoint_test():
     base = Base()
     try:
         tc = get_transfer_client(base.cid, base.rt, base.at)
@@ -112,67 +54,92 @@ def endpoint_test():
     except Exception as e:
         print(f'get endpoint fail! {e}')
     
-
-def ls_test():
-    logger.info(f' ~~~ listing "~" ~~~')
-    base = Base()
-    try:
-        tc = get_transfer_client(base.cid, base.rt, base.at)
-        # print(f'have tc:: {tc}')
-    except Exception as e:
-        print(f'get tc fail! {e}')
-
-    url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/~'
-    query = {"access_token": base.at,
-             "refresh_token": base.rt}
-    logger.debug(f'have url:: {url} and params {query}')
-    response = requests.get(url, params=query)
-    logger.debug(response)
-    logger.debug(response.text)
-    logger.info(' ~~~ done ~~~\n')
-
-def ls_test_empty():
-    logger.info(f' ~~~ listing "" ~~~')
-    base = Base()
-    try:
-        tc = get_transfer_client(base.cid, base.rt, base.at)
-        # print(f'have tc:: {tc}')
-    except Exception as e:
-        print(f'get tc fail! {e}')
-
-    url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/'
-    query = {"access_token": base.at,
-             "refresh_token": base.rt}
-    logger.debug(f'have url:: {url} and params {query}')
-    response = requests.get(url, params=query)
-    logger.debug(response)
-    logger.debug(response.text)
-    logger.info(' ~~~ done ~~~\n')
-
-def ls_test_file():
-    path = 'home/kprice/gpsettings.json'
-    logger.info(f' ~~~ listing "{path}" ~~~')
-    base = Base()
-    try:
-        tc = get_transfer_client(base.cid, base.rt, base.at)
-        # print(f'have tc:: {tc}')
-    except Exception as e:
-        print(f'get tc fail! {e}')
-
+def ls_test(base, path):
     url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/{path}'
     query = {"access_token": base.at,
              "refresh_token": base.rt}
-    logger.debug(f'have url:: {url} and params {query}')
     response = requests.get(url, params=query)
-    logger.debug(response)
-    logger.debug(response.text)
-    logger.info(' ~~~ done ~~~\n')
+    if response.status_code != 200:
+        raise Exception(f'{response.status_code}:: {response.text}')
 
-    
+def rm_test(base, path):
+    pass
+
+def mv_test(base, src, dest):
+    url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/{src}'
+    body = {"destination": f'\"{dest}\"'}
+    query = {"access_token": base.at,
+             "refresh_token": base.rt}
+    logger.debug(f'trying mv with src {src}, and dest {dest}')
+    response = requests.post(url, data=body, params=query)
+    if response.status_code != 200:
+        raise Exception(f'{response.status_code}:: {response.text}')
+
+def mkdir_test(base, path):
+    url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/{path}'
+    body = {}
+    query = {"access_token": base.at,
+             "refresh_token": base.rt}
+    response = requests.post(url, data=body, params=query)
+    if response.status_code != 200:
+        raise Exception(f'{response.status_code}:: {response.text}')
+
+def make_xfer_test(base):
+    pass
+
+def get_xfer_test(base):
+    pass
+
+def rm_xfer_test(base):
+    pass
 
 if __name__ == '__main__':
-    # endpoint_test()
-    # transfer_test()
-    ls_test()
-    ls_test_empty()
-    ls_test_file()
+    base = Base()
+    fails = {}
+    base_path = os.path.expandvars('~')
+
+    try:
+        # ls tests
+        try:
+            ls_test(base, base_path)
+        except Exception as e:
+            print(e)
+            fails['ls_test_1'] = e
+        try:
+            ls_test(base, f'{base_path}/test')
+        except Exception as e:
+            print(e)
+            fails['ls_test_2'] = e
+        try:
+            ls_test(base, f'{base_path}/test.py')  
+        except Exception as e:
+            print(e)
+            fails['ls_test_3'] = e
+        # mkdir tests
+        try:
+            mkdir_test(base, f'{base_path}/mkdirtest')
+        except Exception as e:
+            print(e)
+            fails['mkdir_test_1'] = e
+        # rename tests
+        try:
+            mv_test(base, f'{base_path}/mkdirtest', f'{base_path}/mkdirtest2')
+        except Exception as e:
+            print(e)
+            fails['mv_test_1'] = e
+        # rm tests
+        try:
+            rm_test(base, f'{base_path}/mkdirtest2')
+        except Exception as e:
+            print(e)
+            fails['rm_test_1'] = e
+        
+
+    except Exception as e:
+        print(f'Unknown error running tests:: {e}')
+        exit(1)
+
+    if len(fails) > 0:
+        print(f'One or more tests failed::\n{fails}')
+    else:
+        print('All tests successful')

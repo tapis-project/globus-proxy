@@ -19,23 +19,24 @@ class InternalServerError(BaseTapisError):
     """Internal server error"""
     def __init__(self, msg="Internal Server Error", code=500):
         super().__init__(msg, code)
-    pass
     
 class PathNotFoundError(BaseTapisError):
     """Given path is not found on the endpoint"""
     def __init__(self, msg="Given path is not found on the endpoint", code=404):
         super().__init__(msg, code)
-    pass
 
 class GlobusError(BaseTapisError):
     """General error with the Globus SDK"""
     def __init__(self, msg="Uncaught Globus error", code=407):
         super().__init__(msg, code)
-    pass
 
 class GlobusConsentRequired(BaseTapisError):
     def __init__(self, msg="Endpoint requires consent", code=407):
         super().__init__(msg, code)
-    pass
+
+class GlobusPathExists(BaseTapisError):
+    def __init__(self, msg="A directory with given path already exists", code=409):
+        super().__init__(msg, code)
+    
 
 

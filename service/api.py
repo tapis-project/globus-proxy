@@ -8,7 +8,8 @@ from tapisservice.tapisflask.utils import TapisApi, flask_errors_dict, handle_er
 
 # from service.controllers import AuthURLResource, TokensResource
 # from service.controllers import *
-from controllers import *
+from service.controllers_old import *
+from controllers.ops import OpsResource as _OpsResource
 # from service import app
 app = Flask(__name__)
 app.secret_key = os.urandom(16)
@@ -32,12 +33,12 @@ api.handle_user_exception = handle_error
 api.add_resource(AuthURLResource, '/v3/globus-proxy/auth/url/<client_id>')
 api.add_resource(TokensResource, '/v3/globus-proxy/auth/tokens/<client_id>/<session_id>/<auth_code>')
 api.add_resource(CheckTokensResource, '/v3/globus-proxy/auth/check_tokens/<endpoint_id>')
-api.add_resource(OpsResource, '/v3/globus-proxy/ops/<client_id>/<endpoint_id>/<regex("(.*)"):path>')
+# api.add_resource(OpsResource, '/v3/globus-proxy/ops/<client_id>/<endpoint_id>/<regex("(.*)"):path>')
+api.add_resource(_OpsResource, '/v3/globus-proxy/ops/<client_id>/<endpoint_id>/<regex("(.*)"):path>')
 
 # transfer resourced are separated due to inconsistent url pattern
 api.add_resource(TransferResource, '/v3/globus-proxy/transfers/<client_id>')
 api.add_resource(ModifyTransferResource, '/v3/globus-proxy/transfers/<client_id>/<task_id>')
-
 
 # Health checks
 api.add_resource(ReadyResource, '/v3/globus-proxy/ready')
