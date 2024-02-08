@@ -1,6 +1,7 @@
 ## builtin
 from multiprocessing import AuthenticationError as PythonAuthenticationError
 from datetime import datetime, timedelta
+import json
 
 ## globus
 import globus_sdk
@@ -46,7 +47,8 @@ def autoactivate_endpoint(transfer_client, endpoint_id):
     try:
         logger.info(f'Trying to autoactivate endpoint {endpoint_id}')
         result = transfer_client.endpoint_autoactivate(endpoint_id)
-        logger.debug(f'have res:: {result}')
+        msg = result['message']
+        logger.debug(f'have res:: {msg}')
     except PythonAuthenticationError as e:
         logger.error(f'Endpoint activation failed due to invalid token. Endpoint {endpoint_id} must be manuallty activated')
         raise PythonAuthenticationError()
@@ -141,8 +143,10 @@ def format_path(path, default_dir=None):
 
 def handle_transfer_error(exception, endpoint_id=None, msg=None):
         '''Tanslates transfer api errors into the configured basetapiserrors in ./errors.py'''
+        # logger.debug(f'\nhandling transfer API error:: {exception.code}:: with message {exception.message}\n')
         error = InternalServerError(msg='Interal server error', code=500)
         if getattr(exception, "code", None) == None:
+            logger.debug(f'exception {exception} has no code, therefore returning InternalServerError')
             return error
         if exception.code == "AuthenticationFailed":
             error = AuthenticationError(msg='Could not authenticate transfer client', code=401)
@@ -150,10 +154,12 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
             error = PathNotFoundError(msg='Path does not exist on given endpoint', code=404)
         if exception.code == "ExternalError.DirListingFailed.GCDisconnected":
             error = GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
+        if exception.code == 'ExternalError.DirListingFailed.LoginFailed':
+            error = GlobusError(msg='Your identity does not have permission to access the requested collection. Contact the collection administrator to request access.', code=403)
         if exception.code == 'ConsentRequired':
-            error = GlobusConsentRequired(msg=f'Endpoint {endpoint_id} requires additonal consent. Auth flow ust be manually re-run.')
+            error = GlobusConsentRequired(msg=f'Endpoint {endpoint_id} requires additonal consent. Auth flow ust be manually re-run.', code=407)
         if exception.code == 'ExternalError.MkdirFailed.Exists':
-            error = GlobusPathExists(msg=f'Directory with given path already exists.')
+            error = GlobusPathExists(msg=f'Directory with given path already exists.', code=409)
         return error
 
 def is_endpoint_activated(tc, ep):

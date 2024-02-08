@@ -66,12 +66,13 @@ def rm_test(base, path):
     pass
 
 def mv_test(base, src, dest):
+    logger.debug(f'trying mv with src {src}, and dest {dest}')
     url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/{src}'
     body = {"destination": f'\"{dest}\"'}
     query = {"access_token": base.at,
              "refresh_token": base.rt}
-    logger.debug(f'trying mv with src {src}, and dest {dest}')
-    response = requests.post(url, data=body, params=query)
+    
+    response = requests.put(url, json=body, params=query)
     if response.status_code != 200:
         raise Exception(f'{response.status_code}:: {response.text}')
 
@@ -140,6 +141,6 @@ if __name__ == '__main__':
         exit(1)
 
     if len(fails) > 0:
-        print(f'One or more tests failed::\n{fails}')
+        print(f'{len(fails)} tests failed::\n{fails}')
     else:
         print('All tests successful')

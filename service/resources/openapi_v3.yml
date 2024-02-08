@@ -72,6 +72,12 @@ paths:
           description: Globus client associated with the request.
           schema:
             $ref: '#/components/schemas/ClientIdString'
+        - name: endpoint_id
+          in: path
+          required: true
+          description: Globus endpoint associated with the request.
+          schema:
+            $ref: '#/components/schemas/EndpointIdString'
       responses:
         '200':
           description: Success.
@@ -978,6 +984,10 @@ components:
 
     # --- String types with constraints ------------------------------------
     ClientIdString:
+      type: string
+      example: "1784148a-8ae0-44b7-80b5-b5999e92de3a"
+      minLength: 1
+    EndpointIdString:
       type: string
       example: "1784148a-8ae0-44b7-80b5-b5999e92de3a"
       minLength: 1
