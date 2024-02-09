@@ -56,7 +56,7 @@ paths:
           description: Server error.
 
   # --- Paths for Auth -----------------------------------------------------
-  '/v3/globus-proxy/auth/url/{client_id}':
+  '/v3/globus-proxy/auth/url/{client_id}/{endpoint_id}':
     get:
       tags:
         - Auth
