@@ -40,19 +40,9 @@ class Base:
             return self.config
 
 
-def get_endpoint_test():
-    base = Base()
-    try:
-        tc = get_transfer_client(base.cid, base.rt, base.at)
-        # print(f'have tc:: {tc}')
-    except Exception as e:
-        print(f'get tc fail! {e}')
-
-    try:
-        info = tc.get_endpoint(base.gcp_eid)
-        print(info)
-    except Exception as e:
-        print(f'get endpoint fail! {e}')
+def get_endpoint_test(epid):
+    info = get_collection_type(epid)
+    print(f'got ep info:: {info}')
     
 def ls_test(base, path):
     url = f'{base.base_url}/ops/{base.cid}/{base.gcp_eid}/{path}'
@@ -100,6 +90,12 @@ if __name__ == '__main__':
     base_path = os.path.expandvars('~')
 
     try:
+        # base tests
+        # try:
+        #     get_endpoint_test(base.gcp_eid)
+        # except Exception as e:
+        #     print(e)
+        #     fails['base_test_1'] = e
         # ls tests
         try:
             ls_test(base, base_path)

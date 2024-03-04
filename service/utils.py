@@ -2,6 +2,7 @@
 from multiprocessing import AuthenticationError as PythonAuthenticationError
 from datetime import datetime, timedelta
 import json
+import os
 
 ## globus
 import globus_sdk
@@ -16,6 +17,28 @@ from tapisservice.errors import AuthenticationError
 from errors import *
 
 logger = get_logger(__name__)
+
+def get_collection_type(endpoint_id): # TODO
+    '''
+    Given endpoint id, return type of collection
+    Requires that we have a client ID and client secret in the <tapisdatadir>/globus-proxy/env file
+    '''
+    # _user = os.environ.get("")
+    # _pass = os.environ.get("")
+    client_id = '700bc50b-241c-4805-a4fe-6bd72e50062e'
+    client_secret = 'eHmt/LxxbQqua73tyyQX7G0zJpDXOMQ0oBP/ld+SrS0='
+    auth_client = globus_sdk.ConfidentialAppAuthClient(client_id, client_secret)
+    token_response = auth_client.oauth2_client_credentials_tokens().by_resource_server
+    logger.debug(f'in get_collection_type, got token resp: {token_response}')
+
+    scopes = "urn:globus:auth:scope:transfer.api.globus.org:all"
+    at = token_response["transfer.api.globus.org"]["access_token"]
+    logger.debug(f'got at: {at}')
+    cc_authorizer = globus_sdk.ClientCredentialsAuthorizer(auth_client, scopes)
+    tk_authorizer = globus_sdk.AccessTokenAuthorizer(at)
+    # create a new client
+    transfer_client = globus_sdk.TransferClient(authorizer=tk_authorizer)
+    transfer_client.get_endpoint(endpoint_id)
 
 
 def activate_endpoint(tc, ep_id, username, password):
@@ -143,7 +166,7 @@ def format_path(path, default_dir=None):
 
 def handle_transfer_error(exception, endpoint_id=None, msg=None):
         '''Tanslates transfer api errors into the configured basetapiserrors in ./errors.py'''
-        # logger.debug(f'\nhandling transfer API error:: {exception.code}:: with message {exception.message}\n')
+        logger.critical(f'\nhandling transfer API error:: {exception.code}:: with message {exception.message}\n')
         error = InternalServerError(msg='Interal server error', code=500)
         if getattr(exception, "code", None) == None:
             logger.debug(f'exception {exception} has no code, therefore returning InternalServerError')
@@ -160,6 +183,11 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
             error = GlobusConsentRequired(msg=f'Endpoint {endpoint_id} requires additonal consent. Auth flow ust be manually re-run.', code=407)
         if exception.code == 'ExternalError.MkdirFailed.Exists':
             error = GlobusPathExists(msg=f'Directory with given path already exists.', code=409)
+        if exception.code == 'EndpointPermissionDenied':
+            error = GlobusUnauthorized(msg=e.http_reason)
+        if exception.code == 'EndpointError':
+            if exception.http_reason == 'Bad Gateway':
+                return 
         return error
 
 def is_endpoint_activated(tc, ep):

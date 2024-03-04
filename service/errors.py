@@ -34,9 +34,11 @@ class GlobusConsentRequired(BaseTapisError):
     def __init__(self, msg="Endpoint requires consent", code=407):
         super().__init__(msg, code)
 
+class GlobusUnauthorized(BaseTapisError):
+    def __init__(self, msg="Permission denied", code=407):
+        msg=f"You do not have permission to perform that operation on this endpoint:: {msg}"
+        super().__init__(msg, code)
+
 class GlobusPathExists(BaseTapisError):
     def __init__(self, msg="A directory with given path already exists", code=409):
         super().__init__(msg, code)
-    
-
-
