@@ -127,6 +127,15 @@ def check_tokens(client_id, refresh_token, access_token):
 
     return access_token, refresh_token
 
+def format_path(path, default_dir=None):
+        '''
+        Force absoulte paths for now, due to Globus not ahndling /~/ the same way on all systems
+        if a user provides a relative path, it will instead be returned as an INCORRECT abs path.
+        '''
+        logger.info(f'building path with path {path} and default {default_dir} ')
+        
+        return f"/{path.rstrip('/').lstrip('/')}"
+
 def get_transfer_client(client_id, refresh_token, access_token):
     client = globus_sdk.NativeAppAuthClient(client_id)
     # check_token(client_id, refresh_token, access_token)
@@ -138,8 +147,18 @@ def get_transfer_client(client_id, refresh_token, access_token):
         access_token=access_token, 
         expires_at=expires_at
     )
+    get_token_introspect(client_id, refresh_token)
     transfer_client = globus_sdk.TransferClient(authorizer=authorizer)
     return transfer_client
+
+def get_token_introspect(client_id, refresh_token):
+    logger.debug(f'authed {client_id} with ')
+    CLIENT_ID = '0ffd2a38-27e0-48c5-a870-bcb964237439'
+    CLIENT_SECRET = '+P3dXBG0BE26dLui8HiLQEj8VH+kcbQ/7GyVJzxsOco='
+    ac = globus_sdk.ConfidentialAppAuthClient(CLIENT_ID, CLIENT_SECRET)
+    data = ac.oauth2_token_introspect(refresh_token, include="identity_set")
+    for identity in data["identity_set"]:
+        logger.debug(f'token authenticates for "{identity}"')
 
 def get_valid_token(client_id, refresh_token):
     '''
@@ -154,15 +173,6 @@ def get_valid_token(client_id, refresh_token):
     client = globus_sdk.NativeAppAuthClient(client_id=client_id)
     response = client.oauth2_refresh_token(refresh_token)
     return response['transfer.api.globus.org']['access_token']
-
-def format_path(path, default_dir=None):
-        '''
-        Force absoulte paths for now, due to Globus not ahndling /~/ the same way on all systems
-        if a user provides a relative path, it will instead be returned as an INCORRECT abs path.
-        '''
-        logger.info(f'building path with path {path} and default {default_dir} ')
-        
-        return f"/{path.rstrip('/').lstrip('/')}"
 
 def handle_transfer_error(exception, endpoint_id=None, msg=None):
         '''Tanslates transfer api errors into the configured basetapiserrors in ./errors.py'''

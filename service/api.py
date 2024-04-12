@@ -45,3 +45,15 @@ api.add_resource(ModifyTransferResource, '/v3/globus-proxy/transfers/<client_id>
 api.add_resource(ReadyResource, '/v3/globus-proxy/ready')
 api.add_resource(HealthcheckResource, '/v3/globus-proxy/healthcheck')
 api.add_resource(HelloResource, '/v3/globus-proxy/hello')
+
+@app.before_request
+def log_before():
+    logger.debug(f'Beginning new request:: {request}')
+    if request.json:
+        logger.debug(f'json:: {request.json}')
+
+@app.after_request
+def log_after(response):
+    # logger.debug(f'request complete with status:: {response.data['status']}')
+    logger.debug(f'request complete with status:: {response.status}\n')
+    return response
