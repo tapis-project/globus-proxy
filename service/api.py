@@ -51,9 +51,12 @@ def log_before():
     logger.debug(f'Beginning new request:: {request}')
     if request.json:
         logger.debug(f'json:: {request.json}')
+    logger.debug(f'showing headers:: {request.headers}')
 
 @app.after_request
 def log_after(response):
     # logger.debug(f'request complete with status:: {response.data['status']}')
     logger.debug(f'request complete with status:: {response.status}\n')
+    if response.status == '500' or response.status == '500 INTERNAL SERVER ERROR':
+        logger.debug(response.json)
     return response

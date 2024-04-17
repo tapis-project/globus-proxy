@@ -8,7 +8,7 @@ from tapisservice.errors import AuthenticationError, BaseTapisError
 
 import globus_sdk
 from globus_sdk import TransferAPIError
-from globus_sdk.experimental.auth_requirements_error import GlobusAuthRequirementsError
+# from globus_sdk.experimental.auth_requirements_error import GlobusAuthRequirementsError
 
 from utils import *
 from errors import *
@@ -132,9 +132,9 @@ class OpsResource(Resource):
                 )
             
             raise handle_transfer_error(e)
-        except GlobusAuthRequirementsError as e:
-            logger.error(f'Got Globus auth requirements error in GET: {e}')
-            raise handle_transfer_error(e)
+        # except GlobusAuthRequirementsError as e:
+        #     logger.error(f'Got Globus auth requirements error in GET: {e}')
+        #     raise handle_transfer_error(e)
         except Exception as e:
             logger.error(f'this should not print. You got:: {e}')
             raise handle_transfer_error(e)
