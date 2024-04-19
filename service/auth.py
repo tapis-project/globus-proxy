@@ -16,6 +16,7 @@ def authn_and_authz():
     :return:
     """
    # skip_sk = False
+    logger.debug(f'in authn and authz for tapis')
     authentication()
     #authorization(skip_sk)
 
@@ -28,7 +29,7 @@ def authentication():
     # authorization.
     # we always try to call the primary tapis authentication function to add authentication information to the
     # thread-local. If it fails due to a missing token, we then check if there is a public endpoint
-    logger.debug(request.headers)
+    logger.debug(f'in tapis authentication with {request.headers}')
     try:
         tapisflask.auth.authentication()
         logger.debug(f"Threadlocal tenant id: "+str(conf.tenant[g.tenant_id]))
@@ -46,6 +47,9 @@ def authentication():
                 g.tenant_id = request.args.get('tenant')
                 logger.debug(f"Threadlocal tenant id: "+str(g.tenant_id))
                 return True
+    except Exception as e:
+         logger.error(e)
+         print(e)
 
 # this is the Tapis client that tenants will use for interacting with other services, such as the security kernel.
 Tenants = TenantCache()
