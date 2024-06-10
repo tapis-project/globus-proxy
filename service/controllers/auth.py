@@ -36,7 +36,7 @@ class AuthURLResource(Resource):
             DEPENDENT_SCOPE = f"https://auth.globus.org/scopes/{endpoint_id}/data_access"
             SCOPE = f"urn:globus:auth:scope:transfer.api.globus.org:all[*{DEPENDENT_SCOPE}]"
         else:
-            logger.debug(f'logger is a gcp')
+            logger.debug(f'endpoint is a gcp')
 
         session_client = client.oauth2_start_flow(refresh_tokens=True, requested_scopes=SCOPE)
         

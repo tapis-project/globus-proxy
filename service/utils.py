@@ -7,6 +7,7 @@ import os
 ## globus
 import globus_sdk
 from globus_sdk.scopes import ScopeBuilder, GCSCollectionScopeBuilder, TransferScopes, AuthScopes
+from globus_sdk.services.transfer.errors import TransferAPIError
 
 ## tapis
 from tapisservice.logs import get_logger
@@ -239,11 +240,22 @@ def is_gcp(endpoint_id):
     tapisconf = config.get_config_from_file()
     client_id = tapisconf['client_id']
     client_secret = tapisconf['client_secret']
-    
+    res = {}
+
     client = get_transfer_client_with_secret(client_id, client_secret)
-    res = client.get_endpoint(endpoint_id)
+    try:
+        res = client.get_endpoint(endpoint_id)
+    except TransferAPIError as e:
+        # assume it's a gcp
+        logger.error(f'got error checking collection type: {e}')
+        res['is_globus_connect'] = 'true'
+    except:
+        logger.error(f'got error checking collection type: {e}')
+        raise handle_transfer_error(e)
+        
+        
     gcp = True if res["is_globus_connect"] == 'true' else False
-    logger.debug(f'collection_type: {res} with id {_id}')
+    logger.debug(f'Is collection {endpoint_id} a gcp? : {gcp}')
     return gcp
 
 def ls_endpoint(tc, ep_id, path="~"):

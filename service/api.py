@@ -25,7 +25,6 @@ class RegexConverter(BaseConverter):
 api = TapisApi(app, errors=flask_errors_dict)
 app.url_map.converters['regex'] = RegexConverter
 
-
 # Set up error handling
 api.handle_error = handle_error
 api.handle_exception = handle_error

@@ -12,6 +12,7 @@ from tapisservice.logs import get_logger
 
 # local
 from utils import *
+from controllers.auth import *
 
 
 logger = get_logger(__name__)
@@ -26,6 +27,8 @@ class Base:
     source = None 
     at = None 
     rt = None 
+    gcp_at = None
+    gcp_rt = None
     base_url = None
     secret = None
 
@@ -40,6 +43,8 @@ class Base:
             self.source_eid = "722751ce-1264-43b8-9160-a9272f746d78" # ESnet CERN DTN (Anonymous read-only testing)
             self.at = self.config["access_token"]
             self.rt = self.config["refresh_token"]
+            self.gcp_at = self.config["gcp_at"]
+            self.gcp_rt = self.config["gcp_rt"]
             self.base_url = self.config["base_url"]
             self.secret = self.config['client_secret']
             self.ls6_eid = self.config['ls6_endpoint_id']
@@ -65,6 +70,10 @@ def get_collection_id_test(client_id, client_secret, name):
 def is_gcp_test(endpoint_id):
     res = is_gcp(endpoint_id)
     print(res)
+
+# def get_gcp_auth_url_test(client_id, client_secret, endpoint_id=None)
+#     print(f'about to fetch url for {endpoint_id} using client {client_id}')
+
 
 def get_transfer_client_with_secret_test(client_id, client_secret, endpoint_id=None, addl_scopes=None):
     print(f'about to auth {client_id} with endpoint {endpoint_id} and scopes {addl_scopes}')
@@ -181,6 +190,15 @@ if __name__ == '__main__':
         except Exception as e:
             print(e)
             fails['auth_test_2'] = e 
+
+        # try:
+        #     client_id = base.cid
+        #     client_secret = base.secret
+        #     endpoint_id = base.gcp_eid
+        #     get_gcp_auth_url_test(client_id, client_secret, endpoint_id=endpoint_id)
+        # except Exception as e:
+        #     print(e)
+        #     fails['gcp_test_1'] = e 
 
         # try:
         #     client_id = base.cid
