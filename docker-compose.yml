@@ -4,7 +4,7 @@ version: "3.5"
 
 services:
     globus-proxy:
-        image: tapis/globus-proxy
+        image: tapis/globus-proxy:1.6.2
         volumes:
             - ./configschema.json:/home/tapis/configschema.json
             - ./config-local.json:/home/tapis/config.json
