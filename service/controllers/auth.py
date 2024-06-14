@@ -45,7 +45,7 @@ class AuthURLResource(Resource):
         logger.debug(f"successfully got auth url for client {client_id}")
         return utils.ok(
                 result = {"url": authorize_url, "session_id": session_client.verifier}, 
-                msg = f'Please go to the URL and login. this is a test'
+                msg = f'Please go to the URL and login.'
             )
 
 class TokensResource(Resource):
