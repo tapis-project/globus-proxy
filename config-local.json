@@ -5,6 +5,4 @@
   "service_tenant_id": "admin",
   "log_level": "DEBUG",
   "tenants": ["dev"],
-  "client_id": "0ffd2a38-27e0-48c5-a870-bcb964237439",
-  "client_secret": "+P3dXBG0BE26dLui8HiLQEj8VH+kcbQ/7GyVJzxsOco="
 }
