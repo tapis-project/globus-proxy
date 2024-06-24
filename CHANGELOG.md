@@ -1,17 +1,12 @@
-1.2.0 - 2022-05-31
-
-Initial production release of the Tapis Globus-Proxy API
+1.6.2
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
 Breaking Changes:
-
-    None.
+ - auth flow has been reworked to allow for v5 endpoints - users will need to refresh their auth tokens
 
 New features:
-
-    Upgrade globus_sdk to 3.17
+ - support for GCP collections
 
 Bug fixes:
-
-    None.
+ - none

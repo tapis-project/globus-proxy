@@ -3,11 +3,15 @@ import os
 from flask import Flask
 from werkzeug.routing import BaseConverter
 from tapisservice.tapisflask.resources import HelloResource, ReadyResource
-from tapisservice.tapisflask.utils import TapisApi, flask_errors_dict
+from tapisservice.tapisflask.utils import TapisApi, flask_errors_dict, handle_error
+# from service.auth import authn_and_authz
 
-# from service.controllers import AuthURLResource, TokensResource
-# from service.controllers import *
-from controllers import *
+## local
+from controllers.ops import *
+from controllers.auth import *
+from controllers.healthcheck import *
+from controllers.transfers import *
+
 # from service import app
 app = Flask(__name__)
 app.secret_key = os.urandom(16)
@@ -21,21 +25,36 @@ class RegexConverter(BaseConverter):
 api = TapisApi(app, errors=flask_errors_dict)
 app.url_map.converters['regex'] = RegexConverter
 
-# error handling
-# TODO
+# Set up error handling
+api.handle_error = handle_error
+api.handle_exception = handle_error
+api.handle_user_exception = handle_error
 
 # Resources
-api.add_resource(AuthURLResource, '/v3/globus-proxy/auth/url/<client_id>')
+api.add_resource(AuthURLResource, '/v3/globus-proxy/auth/url/<client_id>/<endpoint_id>')
 api.add_resource(TokensResource, '/v3/globus-proxy/auth/tokens/<client_id>/<session_id>/<auth_code>')
 api.add_resource(CheckTokensResource, '/v3/globus-proxy/auth/check_tokens/<endpoint_id>')
-api.add_resource(OpsResource, '/v3/globus-proxy/ops/<client_id>/<endpoint_id>/<regex("(.+)"):path>')
+api.add_resource(OpsResource, '/v3/globus-proxy/ops/<client_id>/<endpoint_id>/<regex("(.*)"):path>')
 
 # transfer resourced are separated due to inconsistent url pattern
 api.add_resource(TransferResource, '/v3/globus-proxy/transfers/<client_id>')
 api.add_resource(ModifyTransferResource, '/v3/globus-proxy/transfers/<client_id>/<task_id>')
 
-
 # Health checks
 api.add_resource(ReadyResource, '/v3/globus-proxy/ready')
 api.add_resource(HealthcheckResource, '/v3/globus-proxy/healthcheck')
 api.add_resource(HelloResource, '/v3/globus-proxy/hello')
+
+@app.before_request
+def log_before():
+    logger.debug(f'Beginning new request:: {request}')
+    if request.json:
+        logger.debug(f'json:: {request.json}')
+
+@app.after_request
+def log_after(response):
+    # logger.debug(f'request complete with status:: {response.data['status']}')
+    logger.debug(f'request complete with status:: {response.status}\n')
+    if response.status == '500 INTERNAL SERVER ERROR':
+        print(f'its all messed up')
+    return response

@@ -4,5 +4,7 @@
   "service_site_id": "tacc",
   "service_tenant_id": "admin",
   "log_level": "DEBUG",
-  "tenants": ["dev"]
+  "tenants": ["dev"],
+  "client_id": "",
+  "client_secret": ""
 }

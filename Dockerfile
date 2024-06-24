@@ -1,5 +1,4 @@
-FROM tapis/flaskbase:latest
-
+FROM tapis/flaskbase:1.6.3
 
 ADD requirements.txt /home/tapis/requirements.txt
 RUN pip install -r /home/tapis/requirements.txt

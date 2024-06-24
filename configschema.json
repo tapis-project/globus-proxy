@@ -6,6 +6,5 @@
       "type": "string",
       "default": "flask"
     }
-  },
- "required": ["tenants"] 
+  }
 }
