@@ -116,11 +116,13 @@ def format_path(path, default_dir=None):
         
         return f"/{path.rstrip('/').lstrip('/')}"
 
+
 def get_collection_id(client_id, client_secret, name):
     client = get_transfer_client_with_secret(client_id, client_secret)
     result = client.endpoint_search(filter_fulltext=name, filter_non_functional=False, limit=1)
     # print(f'have result:: {result["DATA"][0]["id"]}')
     return result["DATA"][0]["id"]
+
 
 def get_transfer_client(client_id, refresh_token, access_token):
     logger.debug(f'Attempting auth for client {client_id} using token')
@@ -135,8 +137,10 @@ def get_transfer_client(client_id, refresh_token, access_token):
         access_token=access_token, 
         expires_at=expires_at
     )
+    get_token_introspect(client_id, refresh_token)
     transfer_client = globus_sdk.TransferClient(authorizer=authorizer)
     return transfer_client
+
 
 def get_transfer_client_with_secret(client_id, client_secret, endpoint_id=None, addl_scopes=None):
     logger.debug(f'Attempting auth for client {client_id} using secret')
@@ -166,6 +170,7 @@ def get_transfer_client_with_secret(client_id, client_secret, endpoint_id=None, 
         raise handle_transfer_error(e)
     logger.debug(f'got client: {transfer_client} with endpoint: {endpoint_id} and scopes: {scopes}')
     return transfer_client
+
 
 def get_valid_token(client_id, refresh_token):
     '''

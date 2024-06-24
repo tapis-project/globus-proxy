@@ -151,6 +151,7 @@ class OpsResource(Resource):
 
     # mkdir
     def do_mkdir(self, transfer_client, endpoint_id, path):
+        logger.debug(f'In do_mkdir with {endpoint_id}:{path}')
         result = transfer_client.operation_mkdir(
                 endpoint_id=endpoint_id,
                 path=path
