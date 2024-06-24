@@ -21,6 +21,7 @@ class AuthURLResource(Resource):
         # TODO: a call to get_identities needs to be authenticated
         # there might not be a way to figure out if the client_id 
         # is valid or not without letting the user go to the url and find out
+
         try:
             client = globus_sdk.NativeAppAuthClient(client_id)
         except Exception as e:
@@ -28,8 +29,14 @@ class AuthURLResource(Resource):
             logger.error(msg)
             raise InternalServerError(msg=msg)
         
-        DEPENDENT_SCOPE = f"https://auth.globus.org/scopes/{endpoint_id}/data_access"
-        SCOPE = f"urn:globus:auth:scope:transfer.api.globus.org:all[*{DEPENDENT_SCOPE}]"
+        # build scopes
+        SCOPE = None
+        if not is_gcp(endpoint_id):
+            logger.debug(f'endpoint is not a gcp')
+            DEPENDENT_SCOPE = f"https://auth.globus.org/scopes/{endpoint_id}/data_access"
+            SCOPE = f"urn:globus:auth:scope:transfer.api.globus.org:all[*{DEPENDENT_SCOPE}]"
+        else:
+            logger.debug(f'endpoint is a gcp')
 
         session_client = client.oauth2_start_flow(refresh_tokens=True, requested_scopes=SCOPE)
         
@@ -38,7 +45,7 @@ class AuthURLResource(Resource):
         logger.debug(f"successfully got auth url for client {client_id}")
         return utils.ok(
                 result = {"url": authorize_url, "session_id": session_client.verifier}, 
-                msg = f'Please go to the URL and login'
+                msg = f'Please go to the URL and login.'
             )
 
 class TokensResource(Resource):

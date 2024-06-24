@@ -9,7 +9,6 @@ services:
             - ./configschema.json:/home/tapis/configschema.json
             - ./config-local.json:/home/tapis/config.json
             - ./service.log:/home/tapis/service.log
-            - ../gpsettings.json:/home/tapis/gpsettings.json
         container_name: globus-proxy
         networks: 
             - tapis

@@ -27,15 +27,15 @@ class PathNotFoundError(BaseTapisError):
 
 class GlobusError(BaseTapisError):
     """General error with the Globus SDK"""
-    def __init__(self, msg="Uncaught Globus error", code=407):
+    def __init__(self, msg="Uncaught Globus error", code=400):
         super().__init__(msg, code)
 
 class GlobusConsentRequired(BaseTapisError):
-    def __init__(self, msg="Endpoint requires consent", code=407):
+    def __init__(self, msg="Endpoint requires consent", code=403):
         super().__init__(msg, code)
 
 class GlobusUnauthorized(BaseTapisError):
-    def __init__(self, msg="Permission denied", code=407):
+    def __init__(self, msg="Permission denied", code=401):
         msg=f"You do not have permission to perform that operation on this endpoint:: {msg}"
         super().__init__(msg, code)
 

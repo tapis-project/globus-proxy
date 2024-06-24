@@ -6,10 +6,12 @@ import os
 
 ## globus
 import globus_sdk
-from globus_sdk.scopes import TransferScopes
+from globus_sdk.scopes import ScopeBuilder, GCSCollectionScopeBuilder, TransferScopes, AuthScopes
+from globus_sdk.services.transfer.errors import TransferAPIError
 
 ## tapis
 from tapisservice.logs import get_logger
+from tapisservice.config import conf as config
 from tapisservice.tapisflask import utils
 from tapisservice.errors import AuthenticationError
 
@@ -17,28 +19,6 @@ from tapisservice.errors import AuthenticationError
 from errors import *
 
 logger = get_logger(__name__)
-
-def get_collection_type(endpoint_id): # TODO
-    '''
-    Given endpoint id, return type of collection
-    Requires that we have a client ID and client secret in the <tapisdatadir>/globus-proxy/env file
-    '''
-    # _user = os.environ.get("")
-    # _pass = os.environ.get("")
-    client_id = '700bc50b-241c-4805-a4fe-6bd72e50062e'
-    client_secret = 'eHmt/LxxbQqua73tyyQX7G0zJpDXOMQ0oBP/ld+SrS0='
-    auth_client = globus_sdk.ConfidentialAppAuthClient(client_id, client_secret)
-    token_response = auth_client.oauth2_client_credentials_tokens().by_resource_server
-    logger.debug(f'in get_collection_type, got token resp: {token_response}')
-
-    scopes = "urn:globus:auth:scope:transfer.api.globus.org:all"
-    at = token_response["transfer.api.globus.org"]["access_token"]
-    logger.debug(f'got at: {at}')
-    cc_authorizer = globus_sdk.ClientCredentialsAuthorizer(auth_client, scopes)
-    tk_authorizer = globus_sdk.AccessTokenAuthorizer(at)
-    # create a new client
-    transfer_client = globus_sdk.TransferClient(authorizer=tk_authorizer)
-    transfer_client.get_endpoint(endpoint_id)
 
 
 def activate_endpoint(tc, ep_id, username, password):
@@ -136,7 +116,17 @@ def format_path(path, default_dir=None):
         
         return f"/{path.rstrip('/').lstrip('/')}"
 
+
+def get_collection_id(client_id, client_secret, name):
+    client = get_transfer_client_with_secret(client_id, client_secret)
+    result = client.endpoint_search(filter_fulltext=name, filter_non_functional=False, limit=1)
+    # print(f'have result:: {result["DATA"][0]["id"]}')
+    return result["DATA"][0]["id"]
+
+
 def get_transfer_client(client_id, refresh_token, access_token):
+    logger.debug(f'Attempting auth for client {client_id} using token')
+    print(f'Attempting auth for client {client_id} using token')
     client = globus_sdk.NativeAppAuthClient(client_id)
     # check_token(client_id, refresh_token, access_token)
     tomorrow = datetime.today() + timedelta(days=1)
@@ -151,14 +141,36 @@ def get_transfer_client(client_id, refresh_token, access_token):
     transfer_client = globus_sdk.TransferClient(authorizer=authorizer)
     return transfer_client
 
-def get_token_introspect(client_id, refresh_token):
-    logger.debug(f'authed {client_id} with ')
-    CLIENT_ID = '0ffd2a38-27e0-48c5-a870-bcb964237439'
-    CLIENT_SECRET = '+P3dXBG0BE26dLui8HiLQEj8VH+kcbQ/7GyVJzxsOco='
-    ac = globus_sdk.ConfidentialAppAuthClient(CLIENT_ID, CLIENT_SECRET)
-    data = ac.oauth2_token_introspect(refresh_token, include="identity_set")
-    for identity in data["identity_set"]:
-        logger.debug(f'token authenticates for "{identity}"')
+
+def get_transfer_client_with_secret(client_id, client_secret, endpoint_id=None, addl_scopes=None):
+    logger.debug(f'Attempting auth for client {client_id} using secret')
+    try:
+        auth_client = globus_sdk.ConfidentialAppAuthClient(client_id, client_secret)
+    except Exception as e:
+        msg = f'exception:: {e}'
+        print(msg)
+        logger.critical(msg)
+        raise handle_transfer_error(e)
+    scopes = f'urn:globus:auth:scope:transfer.api.globus.org:all'
+    if endpoint_id:
+        access_scope = f'[*https://auth.globus.org/scopes/{endpoint_id}/data_access]'
+        scopes = scopes + access_scope
+    
+    logger.debug(scopes)
+    try:
+        cc_authorizer = globus_sdk.ClientCredentialsAuthorizer(auth_client, scopes)
+    except Exception as e:
+        logger.critical(f'failure instantiating cc_auth:: {e}')
+        raise handle_transfer_error(e)
+    # create a new client
+    try:
+        transfer_client = globus_sdk.TransferClient(authorizer=cc_authorizer)
+    except Exception as e:
+        logger.critical(f'failure getting transfer client:: {e}')
+        raise handle_transfer_error(e)
+    logger.debug(f'got client: {transfer_client} with endpoint: {endpoint_id} and scopes: {scopes}')
+    return transfer_client
+
 
 def get_valid_token(client_id, refresh_token):
     '''
@@ -197,7 +209,8 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
             error = GlobusUnauthorized(msg=e.http_reason)
         if exception.code == 'EndpointError':
             if exception.http_reason == 'Bad Gateway':
-                return 
+                error = InternalServerError(msg="Bad Gateway", code=502)
+        logger.error(error)
         return error
 
 def is_endpoint_activated(tc, ep):
@@ -222,6 +235,33 @@ def is_endpoint_connected(transfer_client, endpoint_id):
         logger.debug(f'endpoint connection status:: {connected}')
         # return connected
         return True
+
+def is_gcp(endpoint_id):
+    '''
+    Given endpoint id, return type of collection
+    Requires that we have a client ID and client secret in the config-local.json file
+    '''
+    logger.error(f'is in gcp with eid: {endpoint_id}')
+    tapisconf = config.get_config_from_file()
+    client_id = tapisconf['client_id']
+    client_secret = tapisconf['client_secret']
+    res = {}
+
+    client = get_transfer_client_with_secret(client_id, client_secret)
+    try:
+        res = client.get_endpoint(endpoint_id)
+    except TransferAPIError as e:
+        # assume it's a gcp
+        logger.error(f'got error checking collection type: {e}')
+        res['is_globus_connect'] = 'true'
+    except:
+        logger.error(f'got error checking collection type: {e}')
+        raise handle_transfer_error(e)
+        
+        
+    gcp = True if res["is_globus_connect"] == 'true' else False
+    logger.debug(f'Is collection {endpoint_id} a gcp? : {gcp}')
+    return gcp
 
 def ls_endpoint(tc, ep_id, path="~"):
     ls = tc.operation_ls(ep_id, path=path)
@@ -257,6 +297,7 @@ def precheck(client_id, endpoints, access_token, refresh_token):
         transfer_client = None
         try:
             transfer_client = get_transfer_client(client_id, refresh_token, access_token)
+            # transfer_client = get)get_transfer_client_with_secret(client_id, )
         except Exception as e:
             logger.error(f'unable to get transfer client or client {client_id}: {e}')
             raise GlobusError(msg='Exception while generating authorization. Please check your request syntax and try again')
