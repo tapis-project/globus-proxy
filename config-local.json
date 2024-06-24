@@ -5,4 +5,6 @@
   "service_tenant_id": "admin",
   "log_level": "DEBUG",
   "tenants": ["dev"],
+  "client_id": "",
+  "client_secret": ""
 }
