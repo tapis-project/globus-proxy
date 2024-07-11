@@ -1,10 +1,8 @@
 name: Docker Image CI
 
 on:
-  push:
-    branches: [ dev, staging, prod ]
-  pull_request:
-    branches: [ dev, staging, prod ]
+  release:
+    types: [published]
 
 jobs:
 
@@ -13,11 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    
-    - name: Extract branch name
+    - name: Debug release name
       shell: bash
-      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-      id: extract_branch
+      run: echo ${{ github.ref_name }}
     
     - name: Checkout
       uses: actions/checkout@v3
@@ -29,7 +25,7 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
     
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag tapis/globus-proxy:${{ steps.extract_branch.outputs.branch }}
+      run: docker build . --file Dockerfile --tag tapis/globus-proxy:${{ github.ref_name }}
     
     - name: Push the image to dockerhub
       run: docker push --all-tags tapis/globus-proxy
