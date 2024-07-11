@@ -12,14 +12,15 @@ jobs:
 
     steps:
     
-    - name: Extract branch name
-      shell: bash
-      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-      id: extract_branch
+    # - name: Extract branch name
+    #   shell: bash
+    #   # run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+    #   run: echo "{name}={branch}" >> $GITHUB_OUTPUT
+    #   id: extract_branch
 
     - name: Debug release name
       shell: bash
-      run: echo ${{ steps.extract_branch.outputs.branch }}
+      run: echo ${{ github.ref_name }}
     
     # - name: Checkout
     #   uses: actions/checkout@v3
