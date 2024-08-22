@@ -770,6 +770,7 @@ components:
           type: string
         size:
           type: integer
+          format: int64
           description: size in bytes
     # --- GlobusTransferItem -------------------------------------------------------------
     GlobusTransferItem:
