@@ -1,12 +1,12 @@
-1.6.2
+1.6.3
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
 Breaking Changes:
- - auth flow has been reworked to allow for v5 endpoints - users will need to refresh their auth tokens
+ - none
 
 New features:
- - support for GCP collections
+ - none
 
 Bug fixes:
- - none
+ - change format of globus file size to int64
