@@ -241,7 +241,7 @@ def is_gcp(endpoint_id):
     Given endpoint id, return type of collection
     Requires that we have a client ID and client secret in the config-local.json file
     '''
-    logger.error(f'is in gcp with eid: {endpoint_id}')
+    logger.debug(f'in is_gcp with eid: {endpoint_id}')
     tapisconf = config.get_config_from_file()
     client_id = tapisconf['client_id']
     client_secret = tapisconf['client_secret']

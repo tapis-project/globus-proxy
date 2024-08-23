@@ -56,5 +56,5 @@ def log_after(response):
     # logger.debug(f'request complete with status:: {response.data['status']}')
     logger.debug(f'request complete with status:: {response.status}\n')
     if response.status == '500 INTERNAL SERVER ERROR':
-        print(f'its all messed up')
+        logger.error(f'Encountered error during request: {response}')
     return response
