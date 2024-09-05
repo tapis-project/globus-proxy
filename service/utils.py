@@ -137,7 +137,7 @@ def get_transfer_client(client_id, refresh_token, access_token):
         access_token=access_token, 
         expires_at=expires_at
     )
-    get_token_introspect(client_id, refresh_token)
+    # get_token_introspect(client_id, refresh_token)
     transfer_client = globus_sdk.TransferClient(authorizer=authorizer)
     return transfer_client
 
