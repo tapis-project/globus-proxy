@@ -30,6 +30,11 @@ class GlobusError(BaseTapisError):
     def __init__(self, msg="Uncaught Globus error", code=400):
         super().__init__(msg, code)
 
+class GlobusInvalidRequestError(BaseTapisError):
+    """malformed request or missing information"""
+    def __init__(self, msg="Invalid request", code=400):
+        super().__init__(msg, code)
+
 class GlobusConsentRequired(BaseTapisError):
     def __init__(self, msg="Endpoint requires consent", code=403):
         super().__init__(msg, code)

@@ -188,7 +188,18 @@ def get_valid_token(client_id, refresh_token):
 
 def handle_transfer_error(exception, endpoint_id=None, msg=None):
         '''Tanslates transfer api errors into the configured basetapiserrors in ./errors.py'''
-        logger.critical(f'\nhandling transfer API error:: {exception.code}:: with message {exception.message}\n')
+        logger.debug('in handle transfer error')
+        message = None
+        try:
+            message = exception.message
+        except AttributeError:
+            logger.debug(f'exception has no attribute message. trying msg instead')
+            try:
+                message = exception.msg
+            except:
+                logger.debug(f'exception has no attribute msg.')
+
+        logger.critical(f'\nhandling transfer API error:: {exception.code}:: with message {message}\n')
         error = InternalServerError(msg='Interal server error', code=500)
         if getattr(exception, "code", None) == None:
             logger.debug(f'exception {exception} has no code, therefore returning InternalServerError')
@@ -206,10 +217,12 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
         if exception.code == 'ExternalError.MkdirFailed.Exists':
             error = GlobusPathExists(msg=f'Directory with given path already exists.', code=409)
         if exception.code == 'EndpointPermissionDenied':
-            error = GlobusUnauthorized(msg=e.http_reason)
+            error = GlobusUnauthorized(msg=exception.http_reason)
         if exception.code == 'EndpointError':
             if exception.http_reason == 'Bad Gateway':
                 error = InternalServerError(msg="Bad Gateway", code=502)
+        if exception.code == 400:
+            error = GlobusInvalidRequestError(msg=message)
         logger.error(error)
         return error
 

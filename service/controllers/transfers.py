@@ -16,18 +16,43 @@ class TransferResource(Resource):
     def post(self, client_id):
         logger.info(f'Beginning creation of transfer task for client: {client_id} with args: {request.args} and json: {request.json}')
         logger.debug(f'request headers:: {request.headers}')
+        logger.debug(f'request json:: {request.json}')
+
+        # setup
+        access_token = None
+        refresh_token = None
+        src = None
+        dest = None
+        items = None
 
         ## parse args
         try:
             access_token = request.args.get('access_token')
+            assert access_token is not None 
+        except AssertionError:
+            logger.error('Missing required access_token param')
+            raise handle_transfer_error(GlobusInvalidRequestError(msg='Invalid request: Missing access_token'))
+        try:
             refresh_token = request.args.get('refresh_token')
+            assert refresh_token is not None
+        except AssertionError:
+            logger.error('Missing required refresh_token param')
+            raise handle_transfer_error(GlobusInvalidRequestError(msg='Invalid request: Missing refresh token'))
+        if request.json is None:
+            logger.error('Missing required transfer data')
+            raise handle_transfer_error(GlobusInvalidRequestError(msg='Invalid request: Missing required transfer data'))
+
+        ## parse transfer data
+        try:
+            # access_token = request.args.get('access_token')
+            # refresh_token = request.args.get('refresh_token')
             src = request.json.get('source_endpoint')
             dest = request.json.get('destination_endpoint')
             items = request.json.get('transfer_items')
         except Exception as e:
             logger.error(f'Error parsing args for request:: {e}')
 
-        logger.debug(f'have setup args \n{access_token}\n{refresh_token}\n{src}\n{dest}\n{items}')
+        logger.debug(f'have setup args \naccess_token: {access_token}\nrefresh_token: {refresh_token}\nsrc: {src}\ndest: {dest}\nitems: {items}\n')
 
         if not access_token or not refresh_token:
             logger.error('error parsing args')

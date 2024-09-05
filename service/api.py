@@ -45,16 +45,18 @@ api.add_resource(ReadyResource, '/v3/globus-proxy/ready')
 api.add_resource(HealthcheckResource, '/v3/globus-proxy/healthcheck')
 api.add_resource(HelloResource, '/v3/globus-proxy/hello')
 
+
 @app.before_request
 def log_before():
-    logger.debug(f'Beginning new request:: {request}')
+    logger.debug(f'========== Received new request:: {request} ==========')
     if request.json:
         logger.debug(f'json:: {request.json}')
 
 @app.after_request
 def log_after(response):
     # logger.debug(f'request complete with status:: {response.data['status']}')
-    logger.debug(f'request complete with status:: {response.status}\n')
+    
     if response.status == '500 INTERNAL SERVER ERROR':
-        logger.error(f'Encountered error during request: {response}')
+        logger.error(f'\tEncountered error during request: {response.json}')
+    logger.debug(f'========== Ended request with status:: {response.status} ==========\n')
     return response
