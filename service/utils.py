@@ -188,7 +188,8 @@ def get_valid_token(client_id, refresh_token):
 
 def handle_transfer_error(exception, endpoint_id=None, msg=None):
         '''Tanslates transfer api errors into the configured basetapiserrors in ./errors.py'''
-        logger.debug('in handle transfer error')
+        # logger.debug('in handle transfer error')
+        logger.exception(exception.__cause__)
         message = None
         try:
             message = exception.message
