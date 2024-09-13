@@ -50,6 +50,7 @@ api.add_resource(HelloResource, '/v3/globus-proxy/hello')
 def log_before():
     logger.info('\n========== Received new request ==========')
     logger.info(f'{request}\n')
+    logger.info(f'\n{request.headers}')
     if request.json:
         logger.info(f'json:: {request.json}')
 
