@@ -37,16 +37,19 @@ class AuthURLResource(Resource):
             SCOPE = f"urn:globus:auth:scope:transfer.api.globus.org:all[*{DEPENDENT_SCOPE}]"
         else:
             logger.debug(f'endpoint is a gcp')
-
-        session_client = client.oauth2_start_flow(refresh_tokens=True, requested_scopes=SCOPE)
         
-        authorize_url = client.oauth2_get_authorize_url()
-        # authorize_url = start_auth_flow(client)
-        logger.debug(f"successfully got auth url for client {client_id}")
-        return utils.ok(
-                result = {"url": authorize_url, "session_id": session_client.verifier}, 
-                msg = f'Please go to the URL and login.'
-            )
+        try:
+            session_client = client.oauth2_start_flow(refresh_tokens=True, requested_scopes=SCOPE)
+            
+            authorize_url = client.oauth2_get_authorize_url()
+            # authorize_url = start_auth_flow(client)
+            logger.debug(f"successfully got auth url for client {client_id}")
+            return utils.ok(
+                    result = {"url": authorize_url, "session_id": session_client.verifier}, 
+                    msg = f'Please go to the URL and login.'
+                )
+        except Exception as e:
+            logger.exception(e.__cause__)
 
 class TokensResource(Resource):
     """
