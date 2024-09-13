@@ -47,3 +47,7 @@ class GlobusUnauthorized(BaseTapisError):
 class GlobusPathExists(BaseTapisError):
     def __init__(self, msg="A directory with given path already exists", code=409):
         super().__init__(msg, code)
+
+class CollectionNotFoundError(BaseTapisError):
+    def __init__(self, msg='Requested endpoint does not exist', code=404):
+        super().__init__(msg, code)

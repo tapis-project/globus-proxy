@@ -189,7 +189,6 @@ def get_valid_token(client_id, refresh_token):
 def handle_transfer_error(exception, endpoint_id=None, msg=None):
         '''Tanslates transfer api errors into the configured basetapiserrors in ./errors.py'''
         # logger.debug('in handle transfer error')
-        logger.exception(exception.__cause__)
         message = None
         try:
             message = exception.message
@@ -201,6 +200,8 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
                 logger.debug(f'exception has no attribute msg.')
 
         logger.critical(f'\nhandling transfer API error:: {exception.code}:: with message {message}\n')
+        if exception.__cause__:
+            logger.exception('cause:: ', exception.__cause__)
         error = InternalServerError(msg='Interal server error', code=500)
         if getattr(exception, "code", None) == None:
             logger.debug(f'exception {exception} has no code, therefore returning InternalServerError')
@@ -209,6 +210,8 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
             error = AuthenticationError(msg='Could not authenticate transfer client', code=401)
         if exception.code == "ClientError.NotFound":
             error = PathNotFoundError(msg='Path does not exist on given endpoint', code=404)
+        if exception.code == 'EndpointNotFound':
+            error = CollectionNotFoundError(msg=f"The requested collection with id {endpoint_id} does not exist")
         if exception.code == "ExternalError.DirListingFailed.GCDisconnected":
             error = GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
         if exception.code == 'ExternalError.DirListingFailed.LoginFailed':
@@ -224,7 +227,8 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
                 error = InternalServerError(msg="Bad Gateway", code=502)
         if exception.code == 400:
             error = GlobusInvalidRequestError(msg=message)
-        logger.error(error)
+        if error:
+            logger.error(error)
         return error
 
 def is_endpoint_activated(tc, ep):
@@ -266,12 +270,14 @@ def is_gcp(endpoint_id):
         res = client.get_endpoint(endpoint_id)
     except TransferAPIError as e:
         # assume it's a gcp
-        logger.error(f'got error checking collection type: {e}')
+        # logger.error(f'got transferapierror checking collection type: {e} -- {e.code} -- {e.message}')
+        if e.code == 'EndpointNotFound':
+            res['is_globus_connect'] = 'false'
+            raise handle_transfer_error(e, endpoint_id=endpoint_id)
         res['is_globus_connect'] = 'true'
     except:
         logger.error(f'got error checking collection type: {e}')
-        raise handle_transfer_error(e)
-        
+        raise handle_transfer_error(e, endpoint_id=endpoint_id)
         
     gcp = True if res["is_globus_connect"] == 'true' else False
     logger.debug(f'Is collection {endpoint_id} a gcp? : {gcp}')
