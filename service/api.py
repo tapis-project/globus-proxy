@@ -48,9 +48,10 @@ api.add_resource(HelloResource, '/v3/globus-proxy/hello')
 
 @app.before_request
 def log_before():
-    logger.debug(f'========== Received new request:: {request} ==========')
-    if request.json:
-        logger.debug(f'json:: {request.json}')
+    logger.info(f'========== Received new request ==========')
+    logger.info({request})
+    # if request.json:
+    #     logger.debug(f'json:: {request.json}')
 
 @app.after_request
 def log_after(response):
@@ -58,5 +59,5 @@ def log_after(response):
     
     if response.status == '500 INTERNAL SERVER ERROR':
         logger.error(f'\tEncountered error during request: {response.json}')
-    logger.debug(f'========== Ended request with status:: {response.status} ==========\n')
+    logger.info(f'========== Ended request with status:: {response.status} ==========\n')
     return response
