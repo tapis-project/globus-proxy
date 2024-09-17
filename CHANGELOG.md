@@ -1,12 +1,17 @@
-1.6.4
+1.7.0
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
 Breaking Changes:
- - new config requirement to have a client_id and client_secret in the config-local.json file. This will be the id and secret of the service client. See https://docs.globus.org/guides/recipes/automate-with-service-account/ for instructions on how to create a service client and give it credentials.
+ - none
 
 New features:
  - none
 
 Bug fixes:
- - none
+ - fixed incorrect error code when globus errors happen while making a transfer
+ - fixed formatting of error logs
+ - fixed 400 error on GET when a content-type header is included
+ - added additional tenant
+ - better error messages for uncaught exceptions
+ - change schema to allow for larger file sizes
