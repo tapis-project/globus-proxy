@@ -65,7 +65,7 @@ class TransferResource(Resource):
             logger.debug(f'have tc:: {transfer_client}')
         except TransferAPIError as e:
             logger.error(f'got TransferAPIError trying to submit transfer job:: {e}')
-            raise handle_transfer_error(e.http_reason)
+            raise handle_transfer_error(e)
         except GlobusError as e:
             raise handle_transfer_error(e)
         except Exception as e:
