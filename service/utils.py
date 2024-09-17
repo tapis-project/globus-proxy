@@ -224,6 +224,8 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
                 error = InternalServerError(msg="Bad Gateway", code=502)
         if exception.code == 400:
             error = GlobusInvalidRequestError(msg=message)
+        if exception.code == 404:
+            error = EndpointNotFoundError(msg=exception.message)
         logger.error(error)
         return error
 
