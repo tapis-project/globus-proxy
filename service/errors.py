@@ -48,6 +48,6 @@ class GlobusPathExists(BaseTapisError):
     def __init__(self, msg="A directory with given path already exists", code=409):
         super().__init__(msg, code)
 
-class CollectionNotFoundError(BaseTapisError):
-    def __init__(self, msg='Requested endpoint does not exist', code=404):
+class EndpointNotFoundError(BaseTapisError):
+    def __init__(self, msg="Could not find requested endpoint", code=404):
         super().__init__(msg, code)

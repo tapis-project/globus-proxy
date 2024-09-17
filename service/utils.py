@@ -70,9 +70,11 @@ def check_consent_required(client, target):
     Checks if an endpoint required consent before operations can be made against it
     returns a list of scopes so we can send it through the auth flow again 
     '''
+    logger.debug('in check_consent_required')
     consent_required_scopes = []
     try:
         ls_endpoint(client, target)
+        logger.debug(f'successful ls on ep: {target}')
     except globus_sdk.TransferAPIError as e:
         if e.info.consent_required:
             consent_required_scopes.extend(e.info.consent_required.required_scopes)
@@ -126,7 +128,6 @@ def get_collection_id(client_id, client_secret, name):
 
 def get_transfer_client(client_id, refresh_token, access_token):
     logger.debug(f'Attempting auth for client {client_id} using token')
-    print(f'Attempting auth for client {client_id} using token')
     client = globus_sdk.NativeAppAuthClient(client_id)
     # check_token(client_id, refresh_token, access_token)
     tomorrow = datetime.today() + timedelta(days=1)
@@ -199,9 +200,7 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
             except:
                 logger.debug(f'exception has no attribute msg.')
 
-        logger.critical(f'\nhandling transfer API error:: {exception.code}:: with message {message}\n')
-        if exception.__cause__:
-            logger.exception('cause:: ', exception.__cause__)
+        logger.critical(f'handling transfer API error:: {exception.code}:: with message {message}')
         error = InternalServerError(msg='Interal server error', code=500)
         if getattr(exception, "code", None) == None:
             logger.debug(f'exception {exception} has no code, therefore returning InternalServerError')
@@ -227,8 +226,9 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
                 error = InternalServerError(msg="Bad Gateway", code=502)
         if exception.code == 400:
             error = GlobusInvalidRequestError(msg=message)
-        if error:
-            logger.error(error)
+        if exception.code == 404:
+            error = EndpointNotFoundError(msg=exception.message)
+        logger.error(error)
         return error
 
 def is_endpoint_activated(tc, ep):
