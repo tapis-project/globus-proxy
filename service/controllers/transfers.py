@@ -15,8 +15,8 @@ app = Flask(__name__)
 class TransferResource(Resource):
     def post(self, client_id):
         logger.info(f'Beginning creation of transfer task for client: {client_id} with args: {request.args} and json: {request.json}')
-        logger.debug(f'request headers:: {request.headers}')
-        logger.debug(f'request json:: {request.json}')
+        # logger.debug(f'request headers:: {request.headers}')
+        # logger.debug(f'request json:: {request.json}')
 
         # setup
         access_token = None
@@ -52,7 +52,7 @@ class TransferResource(Resource):
         except Exception as e:
             logger.error(f'Error parsing args for request:: {e}')
 
-        logger.debug(f'have setup args \naccess_token: {access_token}\nrefresh_token: {refresh_token}\nsrc: {src}\ndest: {dest}\nitems: {items}\n')
+        # logger.debug(f'have setup args \naccess_token: {access_token}\nrefresh_token: {refresh_token}\nsrc: {src}\ndest: {dest}\nitems: {items}\n')
 
         if not access_token or not refresh_token:
             logger.error('error parsing args')
@@ -70,7 +70,8 @@ class TransferResource(Resource):
             raise handle_transfer_error(e)
         except Exception as e:
             logger.error(f'failed to authenticate transfer client :: {e}')
-            raise InternalServerError(msg='Failed to authenticate transfer client')
+            # raise InternalServerError(msg='Failed to authenticate transfer client')
+            raise handle_transfer_error(e)
 
         ## perform request
         result = (transfer(transfer_client, src, dest, items))
@@ -97,12 +98,14 @@ class ModifyTransferResource(Resource):
             transfer_client = precheck(client_id, None, access_token, refresh_token)
         except Exception as e:
             logger.error(f'error while getting transfer client for client id {client_id}: {e}')
-            raise InternalServerError(msg='Error while authenticating globus client')
+            # raise InternalServerError(msg='Error while authenticating globus client')
+            raise handle_transfer_error(e)
         try:
             result = transfer_client.get_task(task_id)
         except Exception as e:
             logger.error(f'error while getting transfer task with id {task_id}: {e}')
-            raise InternalServerError(msg='Error retrieving transfer task')
+            # raise InternalServerError(msg='Error retrieving transfer task')
+            raise handle_transfer_error(e)
         logger.info(f'Successful modify with client {client_id} of task {task_id}')
         return utils.ok(
             result=result.data,
@@ -124,7 +127,8 @@ class ModifyTransferResource(Resource):
             result = transfer_client.cancel_task(task_id)
         except Exception as e:
             logger.error(f'error while canceling transfer task with id {task_id}: {e}')
-            raise AuthenticationError(msg='Error retrieving transfer task')
+            # raise AuthenticationError(msg='Error retrieving transfer task')
+            raise handle_transfer_error(e)
         logger.info(f'Successful delete with client {client_id} of task {task_id}')
         return utils.ok(
             result=result.data,
