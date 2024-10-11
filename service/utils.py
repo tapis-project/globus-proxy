@@ -210,7 +210,7 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
         if exception.code == "ClientError.NotFound":
             error = PathNotFoundError(msg='Path does not exist on given endpoint', code=404)
         if exception.code == 'EndpointNotFound':
-            error = CollectionNotFoundError(msg=f"The requested collection with id {endpoint_id} does not exist")
+            error = EndpointNotFoundError(msg=f"The requested collection with id {endpoint_id} does not exist")
         if exception.code == "ExternalError.DirListingFailed.GCDisconnected":
             error = GlobusError(msg=f'Error connecting to endpoint {endpoint_id}. Please activate endpoint manually', code=407)
         if exception.code == 'ExternalError.DirListingFailed.LoginFailed':
