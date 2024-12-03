@@ -1,4 +1,4 @@
-1.7.1
+1.8.0
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
@@ -9,4 +9,4 @@ New features:
  - none
 
 Bug fixes:
- - fixed incorrect error code when performing operations on an endpoint/collection that has been deleted 
+ - none
