@@ -228,6 +228,8 @@ def handle_transfer_error(exception, endpoint_id=None, msg=None):
             error = GlobusInvalidRequestError(msg=message)
         if exception.code == 404:
             error = EndpointNotFoundError(msg=exception.message)
+        if exception.code == 'EndpointDeleted':
+            error = EndpointNotFoundError(msg=exception.message)
         logger.error(error)
         return error
 
@@ -335,7 +337,10 @@ def precheck(client_id, endpoints, access_token, refresh_token):
             endpoints = list(endpoints.split())
             logger.debug(f'have ep list:: {endpoints}')
         for endpoint_id in endpoints:
-            endpoint_info = transfer_client.get_endpoint(endpoint_id)
+            try:
+                endpoint_info = transfer_client.get_endpoint(endpoint_id)
+            except TransferAPIError as e:
+                raise handle_transfer_error(e)
             endpoint_type = endpoint_info["entity_type"]
             if endpoint_type == "GCP_mapped_collection": # if it's a globus connect personal ep
                 connected = is_endpoint_connected(transfer_client, endpoint_id)
