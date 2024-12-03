@@ -154,3 +154,8 @@ $ curl -x GET "http://localhost:5000/v3/globus-proxy/transfers/<client id>/<task
 }
 ```
 
+## Links
+
+docker: https://hub.docker.com/r/tapis/globus-proxy
+github: https://github.com/tapis-project/globus-proxy
+
