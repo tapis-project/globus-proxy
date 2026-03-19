@@ -1,4 +1,4 @@
-25Q4.0
+26Q1.0
 
 Live-docs: https://tapis-project.github.io/live-docs/?service=GlobusProxy
 
